@@ -13,7 +13,9 @@ este README describe cómo **operar** el repo día a día.
 ## Prerrequisitos
 
 - **Node.js 18+** para la CLI de OpenSpec.
-- **Python 3.11+** para el framework de tests.
+- **Python 3.11+** para el framework de tests — o **Docker**, como
+  alternativa si Python no está disponible o no se ejecuta
+  correctamente en tu máquina (ver [Ejecutar con Docker](#ejecutar-con-docker)).
 - **Claude Code** instalado y autenticado.
 - Acceso al ambiente de pruebas del API (URL base + token admin) y a
   su base de datos (para aserciones de estado).
@@ -45,6 +47,8 @@ npm install -g @fission-ai/openspec@latest
 ├── src/framework/             # Framework de tests (bootstrapeado, ver Setup inicial)
 ├── tests/                     # Tests por endpoint (creados por change por TC)
 ├── reports/                   # Reportes HTML/JSON de cada ejecución (git-ignored)
+├── Dockerfile                 # Imagen alternativa a instalar Python local
+├── .dockerignore              # Exclusiones del build context (secretos, .venv, etc.)
 ├── pyproject.toml             # Dependencias y config de pytest/ruff
 ├── variables.yaml             # Variables no sensibles versionadas
 ├── env.example                # Plantilla de secretos y URLs
@@ -138,6 +142,68 @@ Los tres deben pasar en verde. Si algo falla, revisa
 > `openspec/changes/archive/2026-08-06-add-test-framework-base/` — no
 > necesitas volver a ejecutarlo en un clon nuevo; solo instalar y
 > configurar como arriba.
+
+---
+
+## Ejecutar con Docker
+
+Alternativa al setup con `venv` (pasos 1-2 de arriba) si Python 3.11+
+no está instalado o no se ejecuta correctamente en tu máquina. El
+contenedor **no usa `venv`** — instala el stack directamente en su
+Python de sistema, ya que el propio contenedor es el aislamiento.
+
+Los pasos 3 y 4 del setup (`.env` y `variables.yaml`) siguen aplicando
+igual: se editan en tu máquina host, no dentro del contenedor.
+
+### 1. Construye la imagen (una vez, y cada vez que cambie `pyproject.toml`)
+
+```bash
+docker build -t api-test-framework .
+```
+
+### 2. Llena `.env` y `variables.yaml` en el host
+
+Sigue los pasos [3](#3-llena-secretos) y [4](#4-llena-variables-versionadas)
+de arriba tal cual, sobre los archivos del repo en tu máquina.
+
+### 3. Entra al contenedor
+
+```bash
+docker run -it --rm \
+    --env-file .env \
+    -v "$(pwd):/app" \
+    api-test-framework
+```
+
+- `--env-file .env` inyecta los secretos como variables de entorno del
+  proceso — `pydantic-settings` los lee igual que en local. El archivo
+  nunca se copia dentro de la imagen.
+- `-v "$(pwd):/app"` monta todo el repo sobre `/app`, así `tests/`,
+  `variables.yaml` y `reports/` se comparten en ambas direcciones sin
+  reconstruir la imagen.
+- En PowerShell, reemplaza `$(pwd)` por `${PWD}`.
+
+Dentro del contenedor caes en un shell (`bash`) con el paquete ya
+instalado en modo editable. Corre los mismos comandos de siempre:
+
+```bash
+pytest --collect-only
+pytest --stepwise -k "TC-001" -v
+pytest --last-failed -v
+ruff check --fix . && ruff format .
+```
+
+Los reportes y la matriz reanotada quedan en tu host al salir del
+contenedor, porque son el mismo archivo (bind mount), no una copia.
+
+### 4. Sal del contenedor
+
+```bash
+exit
+```
+
+El contenedor se elimina solo (`--rm`); la imagen queda cacheada para
+la próxima vez.
 
 ---
 

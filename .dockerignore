@@ -1,0 +1,33 @@
+# Secretos — nunca deben llegar al build context de la imagen
+.env
+.env.local
+.env.*.local
+
+# Entornos virtuales locales — redundantes dentro del contenedor
+.venv/
+venv/
+env/
+
+# Control de versiones y editor
+.git/
+.vscode/
+.idea/
+
+# Artefactos de Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Artefactos de pytest / ruff
+.pytest_cache/
+.ruff_cache/
+.cache/
+.hypothesis/
+
+# Reportes generados — se montan en runtime, no se hornean en la imagen
+reports/*.html
+reports/*.json
+reports/*.xml
+reports/assets/
