@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "api-test-framework"
+version = "0.1.0"
+description = "Framework de automatizacion de pruebas de APIs REST (QA)."
+requires-python = ">=3.11"
+dependencies = [
+    "pytest==9.1.1",
+    "pytest-html==4.2.0",
+    "pytest-check==2.9.1",
+    "pytest-json-report==1.5.0",
+    "httpx==0.28.1",
+    "sqlalchemy==2.0.51",
+    "pymysql[rsa]==1.2.0",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.2",
+    "PyYAML==6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff==0.16.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers -ra --tb=short"
+testpaths = ["tests"]
+markers = [
+    "tc(id): identifica el TC-XXX que implementa este test",
+    "prioridad(nivel): prioridad del caso de prueba",
+    "criticidad(nivel): criticidad del caso de prueba",
+    "tipo(clase): clase/tipo de caso de prueba",
+    "tecnica(nombre): tecnica de diseno de casos aplicada",
+    "rol(nombre): rol de usuario bajo el cual se ejecuta el caso",
+    "impacto(nivel): nivel de impacto del caso de prueba",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
