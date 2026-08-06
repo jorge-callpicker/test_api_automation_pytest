@@ -31,6 +31,7 @@ def settings() -> Settings:
 @pytest.fixture(scope="session")
 def http_client(settings: Settings):
     test_client = build_client(settings)
+    test_client.last_request = None
     yield test_client
     test_client.close()
 
