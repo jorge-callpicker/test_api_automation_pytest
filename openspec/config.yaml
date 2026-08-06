@@ -1,0 +1,134 @@
+schema: spec-driven
+
+context: |
+  # Proyecto
+
+  Repositorio de automatización de pruebas para APIs REST del equipo de QA.
+  El equipo se encuentra en transición del diseño y ejecución manual hacia
+  la automatización asistida por IA (OpenSpec + Claude Code).
+
+  Cada endpoint del API bajo prueba se implementa como un conjunto de
+  casos de prueba (`TC-XXX`) derivados de tres artefactos de entrada
+  ubicados en `inputs/<endpoint>/`:
+
+  1. `docs.md` — documentación del endpoint (rutas, validaciones,
+     respuestas HTTP).
+  2. `matriz-raiz.csv` — matriz de partición de equivalencias y valores
+     límite. Puede acompañarse de archivos `matriz-<objeto-anidado>.csv`.
+  3. `casos-prueba.md` — casos de prueba en formato AAA (Arrange-Act-Assert)
+     resultantes de aplicar tabla de decisión, transición de estados,
+     pairwise y priorización por riesgo. Cada caso tiene un ID `TC-XXX`.
+
+  # Alcance de un change proposal
+
+  Cada change proposal implementa exactamente un `TC-XXX` del artefacto
+  AAA. No se agrupan casos. No se implementan varios TC en un solo change.
+  Esto preserva la trazabilidad requerimiento → TC → commit → resultado
+  ejecutado, exigida por el equipo de QA.
+
+  # Stack técnico pinneado (obligatorio)
+
+  El framework de pruebas usa Python 3.11+ con el siguiente stack. Las
+  versiones son las verificadas por el equipo — no cambiar sin
+  justificación explícita del QA:
+
+  | Paquete             | Versión  | Uso                                                      |
+  |---------------------|----------|----------------------------------------------------------|
+  | pytest              | 9.1.1    | Runner. `--stepwise` y `--last-failed` obligatorios.     |
+  | pytest-html         | 4.2.0    | Reporte único con `--self-contained-html`.               |
+  | pytest-check        | 2.9.1    | Soft assertions. Sin esto los TC se cortan en Assert 1.  |
+  | pytest-json-report  | 1.5.0    | Genera `resultados.json` para reanotar la matriz CSV.    |
+  | httpx               | 0.28.1   | Cliente HTTP síncrono. Expone `Request` crudo para cURL. |
+  | sqlalchemy          | 2.0.51   | Core (no ORM) para aserciones en BD con AUTOCOMMIT.      |
+  | pymysql[rsa]        | 1.2.0    | Driver MySQL/MariaDB en Python puro.                     |
+  | pydantic            | 2.13.4   | Modelado y validación de configuración.                  |
+  | pydantic-settings   | 2.14.2   | Carga de `.env`, credenciales fuera del código.          |
+  | ruff                | 0.16.1   | Lint + format (dev).                                     |
+
+  # Convención de variables
+
+  Los casos de prueba nunca contienen valores literales de negocio. Todo
+  dato se referencia con la sintaxis `{{nombre-de-variable}}` y se resuelve
+  en tiempo de ejecución desde dos fuentes:
+
+  - `.env` (no versionado) — secretos y config sensible: `GLB-token_admin`,
+    `GLB-url_base`, credenciales de BD.
+  - `variables.yaml` (versionado) — datos sembrados no sensibles: IDs de
+    referencia (`GLB-account_id_valido`, `GLB-inbox_id_valido`) y datos
+    específicos por caso (`TC-XXX-<nombre>`).
+
+  Prefijos:
+
+  - `GLB-*` → aplica a todos los TC del endpoint o del proyecto.
+  - `TC-XXX-*` → aplica exclusivamente al caso `TC-XXX`. No se reutiliza
+    entre casos porque los datos sembrados pueden dejar la BD en un estado
+    inválido para otros casos (ej: un template con `active = -1`).
+
+  Regla de mapeo env: `{{GLB-token_admin}}` se resuelve leyendo
+  `GLB_TOKEN_ADMIN` de `.env` (guion → underscore, upper).
+
+  # Aserciones AAA y política de soft assertions
+
+  Los casos siguen la estructura Arrange-Act-Assert. En el bloque Assert
+  cada validación es una aserción independiente que debe ejecutarse aunque
+  otra falle. Regla de implementación:
+
+  - La primera aserción (típicamente status code HTTP) es `assert` duro,
+    porque si falla el resto pierde sentido.
+  - Todas las demás usan `pytest_check.check(...)`.
+
+  # Aserciones en base de datos
+
+  Se usa SQLAlchemy Core (no ORM) con `isolation_level="AUTOCOMMIT"`. La
+  conexión se obtiene por fixture con scope de función. No se abren
+  transacciones desde los tests.
+
+  # Ciclo humano-en-medio (crítico)
+
+  OpenSpec y Claude Code no ejecutan las pruebas. La ejecución la realiza
+  el QA manualmente contra el ambiente. El ciclo por cada TC es:
+
+  1. QA invoca `/opsx:propose <change-name>`.
+  2. Claude genera la propuesta (proposal + tasks + design opcional).
+  3. QA revisa y ajusta.
+  4. Claude aplica la propuesta (genera código de test).
+  5. Claude se detiene y entrega instrucciones exactas de ejecución.
+  6. QA ejecuta `pytest` localmente y captura la salida.
+  7. QA pega la salida como retroalimentación.
+  8. Si falla: Claude corrige y regresa al paso 5. Si pasa: continúa.
+  9. QA archiva el change (`/opsx:archive`) y hace commit.
+  10. Siguiente TC.
+
+  Bajo ninguna circunstancia Claude asume éxito de una ejecución sin
+  retroalimentación explícita del QA.
+
+  # Reporte y trazabilidad
+
+  Cada ejecución debe generar:
+
+  - `reports/report.html` — reporte HTML autocontenido (pytest-html).
+  - `reports/resultados.json` — reporte JSON (pytest-json-report).
+
+  La matriz CSV en `inputs/<endpoint>/matriz-raiz.csv` se reanota con el
+  resultado pass/fail de cada TC leyendo `resultados.json`. El script de
+  reanotación forma parte del framework (no es responsabilidad de un TC).
+
+rules:
+  proposal:
+    - "Cada proposal implementa exactamente un caso TC-XXX del artefacto `inputs/<endpoint>/casos-prueba.md`. Si el TC no existe allí, detente y solicita que se genere primero (con el skill de refinamiento de casos)."
+    - "En la sección `Why` cita explícitamente los identificadores del requerimiento validado (por ejemplo `CA-08`, `F1.RN3`, `RN.GEN1`) tal como aparecen en el TC de origen."
+    - "En la sección `What Changes` lista las variables `{{GLB-*}}` y `{{TC-XXX-*}}` que el test consumirá. Si alguna no existe en `variables.yaml` o `.env.example`, propón añadirla como parte del change."
+    - "Nombre del change: `add-test-<endpoint-slug>-tc-<nnn>`, todo minúsculas. Ejemplo: `add-test-templates-delete-tc-001`."
+
+  tasks:
+    - "Cada elemento del bloque `Assert:` del caso AAA se traduce a una tarea independiente en el proposal. Si el caso tiene 3 asserts, hay al menos 3 tareas de aserción."
+    - "Ninguna tarea contiene valores literales de negocio (IDs, tokens, URLs, cuerpos de respuesta). Todo se referencia como `{{...}}` y se resuelve vía el cargador de configuración."
+    - "En el código generado, usa `pytest_check.check(...)` para todas las aserciones excepto la primera (status code HTTP), que es `assert` duro."
+    - "Incluye siempre una tarea final marcada como bloqueante: `Ejecutar pytest --stepwise -k <TC-ID> y entregar salida al QA para retroalimentación`. El change no se archiva sin retroalimentación humana positiva."
+
+  specs:
+    - "Las specs describen contratos observables del endpoint (comportamientos), no casos individuales. Un endpoint = una spec. Los TC quedan trazados como changes archivados, no como líneas de spec."
+    - "Cada requirement de la spec debe tener al menos un scenario con formato `WHEN ... THEN ...` derivado de un CA o RN del requerimiento original."
+
+  design:
+    - "Solo crea `design.md` cuando el TC introduzca un helper reutilizable del framework (fixture nueva, matcher, generador de datos), un cambio en el cargador de configuración, o una decisión que afecte a otros endpoints. Los TC estándar no requieren design."

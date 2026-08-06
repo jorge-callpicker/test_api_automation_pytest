@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# Pytest / test artifacts
+.pytest_cache/
+.cache/
+.hypothesis/
+
+# Reportes generados por corrida — NO versionar
+reports/*.html
+reports/*.json
+reports/*.xml
+reports/assets/
+
+# Cobertura
+.coverage
+.coverage.*
+htmlcov/
+
+# Ruff
+.ruff_cache/
+
+# Secretos y config local
+.env
+.env.local
+.env.*.local
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# OpenSpec locks (si aplica)
+.openspec-lock
