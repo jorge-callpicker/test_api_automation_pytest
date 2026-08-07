@@ -3,26 +3,41 @@
 # Variables no sensibles para resolver placeholders {{...}} en los tests.
 # Los secretos y URLs de ambiente viven en .env (ver .env.example).
 #
-# Convenciones:
-#   globals.GLB-<nombre>                → aplica a todos los TC.
-#   test_cases.TC-XXX.variables.<nombre> → aplica exclusivamente al TC-XXX.
-#
-# El framework resuelve:
-#   {{GLB-account_id_valido}}          → globals.GLB-account_id_valido
-#   {{TC-001-template_id_sin_envios}}  → test_cases.TC-001.variables.TC-001-template_id_sin_envios
+# Tres secciones hermanas:
+#   globals:        variables GLB-*      → aplican a todo el proyecto
+#   test_cases:     variables TC-XXX-*   → aplican a un caso AAA del .md
+#   matrix_values:  variables MTZ-*      → aplican a tests de matriz CSV
 #
 # Placeholders `[REQUIERE RESPUESTA: ...]` deben reemplazarse con el valor
-# real sembrado en el ambiente de pruebas antes de ejecutar el TC.
+# real sembrado en el ambiente de pruebas antes de ejecutar el TC/matriz.
+
+# =============================================================================
+# GLOBALS — Variables GLB-* aplicables a todos los tests
+# =============================================================================
+#
+# Regla de resolución:
+#   {{GLB-account_id_valido}} → primero busca en .env como
+#   GLB_ACCOUNT_ID_VALIDO (guion → underscore, upper); si no está, busca
+#   aquí en globals.
+
+globals:
+  GLB-account_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a una cuenta válida en el ambiente de pruebas. Ejemplo: 6]"
+  GLB-inbox_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a un inbox válido asociado a la cuenta anterior. Ejemplo: 5]"
+
+# =============================================================================
+# TEST_CASES — Variables TC-XXX-* específicas de casos AAA del .md
+# =============================================================================
+#
+# Cada bloque TC-XXX contiene:
+#   description: título del caso tal como aparece en casos-prueba.md
+#   seed:        qué debe existir en la BD antes de ejecutar el test
+#   variables:   diccionario TC-XXX-<nombre>: <valor>
 #
 # Nota importante sobre datos de un solo uso:
 #   Los templates sembrados para tests de eliminación quedan con
 #   active = -1 tras la ejecución exitosa. No reutilizar entre corridas —
 #   sembrar nuevos y actualizar aquí, o versionar la matriz de seed y
 #   automatizar el re-seed (change proposal futuro).
-
-globals:
-  GLB-account_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a una cuenta válida en el ambiente de pruebas. Ejemplo: 6]"
-  GLB-inbox_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a un inbox válido asociado a la cuenta anterior. Ejemplo: 5]"
 
 test_cases:
 
@@ -55,3 +70,55 @@ test_cases:
       conservar active != -1 tras la ejecución (el 423 impide el borrado).
     variables:
       TC-003-template_id_estado_running: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100125]"
+
+# =============================================================================
+# MATRIX_VALUES — Variables MTZ-* consumidas por tests de matriz CSV
+# =============================================================================
+#
+# Se pobla al ejecutar `/opsx:propose add-test-<endpoint>-matriz-<nombre>`.
+#
+# Nomenclatura obligatoria:
+#   MTZ-<endpoint-slug>-<nombre_campo>-<abreviatura_indicacion>
+#
+# El prefijo MTZ- es obligatorio (aunque el resto ya identifique al
+# endpoint) — sirve como señal inmediata al leer un test de que el valor
+# proviene de la matriz de particiones.
+#
+# Catálogo fijo de abreviaturas (ver openspec/config.yaml §
+# "Convención de variables MTZ"):
+#   min, max, typ, outmin, outmax, type, null, empty, regex,
+#   len_min, len_max, len_outmin, len_outmax, wl, outwl.
+#
+# Catálogo de generadores disponibles: ver docs/generators-catalog.md
+# (autogenerado por `python -m framework.generators --catalog`).
+#
+# ---------------------------------------------------------------------------
+# Ejemplo A — Resolución estática (literal, preferida por defecto):
+# ---------------------------------------------------------------------------
+#
+#   matrix_values:
+#     # (valor entero justo por encima del máximo permitido de 2147483648)
+#     MTZ-templates-delete-account_id-outmax: 2147483649
+#
+#     # (valor entero justo por debajo del mínimo permitido de 1)
+#     MTZ-templates-delete-account_id-outmin: 0
+#
+#     # (valor de tipo string en un campo que espera entero)
+#     MTZ-templates-delete-account_id-type: "abc"
+#
+# ---------------------------------------------------------------------------
+# Ejemplo B — Resolución en runtime (generador, cuando se requiere variedad):
+# ---------------------------------------------------------------------------
+#
+#   matrix_values:
+#     # (cadena aleatoria de 500 caracteres, superando límite de 255)
+#     MTZ-templates-create-name-len_outmax:
+#       generator: random_string
+#       params: { length: 500 }
+#
+#     # (correo con formato inválido variado)
+#     MTZ-users-create-email-regex:
+#       generator: regex_violating
+#       params: { regex: "^[^@]+@[^@]+\\.[^@]+$" }
+
+matrix_values: {}
