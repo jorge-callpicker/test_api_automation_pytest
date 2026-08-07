@@ -21,56 +21,37 @@
 #   aquí en globals.
 
 globals:
-  GLB-account_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a una cuenta válida en el ambiente de pruebas. Ejemplo: 6]"
+  GLB-account_id_valido: 65
   GLB-inbox_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a un inbox válido asociado a la cuenta anterior. Ejemplo: 5]"
 
-# =============================================================================
-# TEST_CASES — Variables TC-XXX-* específicas de casos AAA del .md
-# =============================================================================
-#
-# Cada bloque TC-XXX contiene:
-#   description: título del caso tal como aparece en casos-prueba.md
-#   seed:        qué debe existir en la BD antes de ejecutar el test
-#   variables:   diccionario TC-XXX-<nombre>: <valor>
-#
-# Nota importante sobre datos de un solo uso:
-#   Los templates sembrados para tests de eliminación quedan con
-#   active = -1 tras la ejecución exitosa. No reutilizar entre corridas —
-#   sembrar nuevos y actualizar aquí, o versionar la matriz de seed y
-#   automatizar el re-seed (change proposal futuro).
+  #GLB-url_cp_api: "https://black.digitum.com.mx/chucho/callpicker_api/api_develop"
+  GLB-url_cp_api: "https://black.digitum.com.mx/paloma/callpicker_api/api_develop"
+
+  # Valores para el Login y seleccion de cuenta
+  GLB-path_login: "/panel_chat/login"
+  GLB-path_select_account: "/panel_chat/selectAccount/{account_id}"
+
+  ## Usuario SuperAdmin
+  ## Definidas en .env:  USR_SADMIN, PSW_SADMIN
+
+  ## Usuario Admin
+  ## Definidas en .env:  USR_ADMIN, PSW_ADMIN
+
 
 test_cases:
 
-  TC-001:
-    description: "Eliminación exitosa sin envíos masivos asociados (Admin) - Set 1"
-    seed: |
-      Sembrar en la tabla `Templates Gupshup` un template con active != -1
-      asociado a GLB-account_id_valido y GLB-inbox_id_valido, sin ningún
-      envío masivo relacionado. Este template quedará con active = -1
-      tras la ejecución del test — no reutilizar en otros casos.
-    variables:
-      TC-001-template_id_sin_envios: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100123]"
+  #Template
+  #TC-001:
+  #  description: "Eliminación exitosa sin envíos masivos asociados (Admin) - Set 1"
+  #  seed: |
+  #    Sembrar en la tabla `Templates Gupshup` un template con active != -1
+  #    asociado a GLB-account_id_valido y GLB-inbox_id_valido, sin ningún
+  #    envío masivo relacionado. Este template quedará con active = -1
+  #    tras la ejecución del test — no reutilizar en otros casos.
+  #  variables:
+  #    TC-001-template_id_sin_envios: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100123]"
 
-  TC-002:
-    description: "Bloqueo por combinación de envíos masivos, permitidos y uno bloqueante (RUNNING) - Set 2"
-    seed: |
-      Sembrar en la tabla `Templates Gupshup` un template asociado a 3
-      envíos masivos con estados BROADCAST, STOPPED y RUNNING
-      respectivamente. Todos apuntando al mismo template_id. Este template
-      debe conservar active != -1 tras la ejecución (el 423 impide el
-      borrado).
-    variables:
-      TC-002-template_id_mixto: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100124]"
-
-  TC-003:
-    description: "Bloqueo por envío masivo en estado RUNNING - Set 2"
-    seed: |
-      Sembrar en la tabla `Templates Gupshup` un template asociado a
-      exactamente un envío masivo con estado RUNNING. Este template debe
-      conservar active != -1 tras la ejecución (el 423 impide el borrado).
-    variables:
-      TC-003-template_id_estado_running: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100125]"
-
+  
 # =============================================================================
 # MATRIX_VALUES — Variables MTZ-* consumidas por tests de matriz CSV
 # =============================================================================
@@ -122,3 +103,4 @@ test_cases:
 #       params: { regex: "^[^@]+@[^@]+\\.[^@]+$" }
 
 matrix_values: {}
+

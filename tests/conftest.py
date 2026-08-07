@@ -5,6 +5,8 @@ from html import escape
 
 import pytest
 
+from framework import auth
+from framework.auth import SessionTokens
 from framework.config import Settings
 from framework.db import engine as build_engine
 from framework.http import client as build_client
@@ -38,6 +40,20 @@ def db_conn(settings: Settings):
     conn = _get_engine(settings).connect()
     yield conn
     conn.close()
+
+
+@pytest.fixture(scope="session")
+def session_tokens(settings: Settings, http_client):
+    cache: dict[str, SessionTokens] = {}
+
+    def factory(role: str) -> SessionTokens:
+        if role not in cache:
+            cache[role] = auth.obtain_session_tokens(
+                role, settings=settings, http_client=http_client
+            )
+        return cache[role]
+
+    return factory
 
 
 @pytest.fixture(scope="function")

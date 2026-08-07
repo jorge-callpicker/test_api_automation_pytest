@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     DB_USER: str
     DB_PASSWORD: str
 
+    USR_SADMIN: str
+    PSW_SADMIN: str
+    USR_ADMIN: str
+    PSW_ADMIN: str
+
 
 @lru_cache(maxsize=1)
 def load_variables() -> dict:
