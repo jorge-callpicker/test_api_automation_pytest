@@ -14,6 +14,8 @@ class Settings(BaseSettings):
 
     GLB_URL_BASE: str
     GLB_TOKEN_ADMIN: str
+    GLB_URL_CHATWOOT: str
+    GLB_TOKEN_CHATWOOT_ADMIN: str
     DB_HOST: str
     DB_PORT: int
     DB_NAME: str
