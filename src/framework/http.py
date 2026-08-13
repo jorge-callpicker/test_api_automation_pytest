@@ -18,6 +18,10 @@ def client(settings: Settings) -> httpx.Client:
     return instance
 
 
+def auth_header(access_token: str) -> dict[str, str]:
+    return {"api-access-token": access_token}
+
+
 def to_curl(request: httpx.Request) -> str:
     parts = ["curl", "-X", request.method, f"'{request.url}'"]
     for key, value in request.headers.items():

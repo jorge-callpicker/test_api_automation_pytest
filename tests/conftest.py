@@ -5,7 +5,8 @@ from html import escape
 
 import pytest
 
-from framework.config import Settings
+from framework.auth import fetch_tokens
+from framework.config import Settings, load_variables, role_credentials
 from framework.db import engine as build_engine
 from framework.http import client as build_client
 from framework.http import to_curl
@@ -38,6 +39,13 @@ def db_conn(settings: Settings):
     conn = _get_engine(settings).connect()
     yield conn
     conn.close()
+
+
+@pytest.fixture(scope="session")
+def access_tokens(settings: Settings, http_client) -> dict[str, dict[str, str]]:
+    oauth_roles = load_variables()["globals"].get("GLB-oauth_roles", {})
+    credentials_by_role = {role: role_credentials(settings, role) for role in oauth_roles}
+    return fetch_tokens(http_client, oauth_roles, credentials_by_role)
 
 
 @pytest.fixture(scope="function")
