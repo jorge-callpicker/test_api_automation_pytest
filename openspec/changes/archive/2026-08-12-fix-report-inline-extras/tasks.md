@@ -37,7 +37,7 @@
       falle a propósito — únicamente para ejercitar el hook de reporte y
       confirmar visualmente el nuevo comportamiento. Documentar en el
       propio test que es temporal y se elimina en la tarea 3.4.
-- [ ] 3.3 Ejecutar:
+- [x] 3.3 Ejecutar:
       ```bash
       pytest --html=reports/report.html --self-contained-html \
           --json-report --json-report-file=reports/resultados.json -v
@@ -47,8 +47,20 @@
       confirmar que el cURL y el texto de la aserción fallida aparecen
       **inline** dentro de la fila expandida, en ambos navegadores, sin
       necesidad de refresh y sin ningún link `data:`.
-- [ ] 3.4 Eliminar el test temporal agregado en 3.2.
-- [ ] 3.5 Entregar al QA la salida de pytest y confirmación de lo
+
+      QA confirmó: `test_report_extras_render_inline` falló como se
+      esperaba (fallo intencional de `pytest_check`) y el cURL más la
+      aserción fallida se ven inline en Firefox y en Chrome/Brave — sin
+      links `data:`, sin necesidad de refresh. (Ejecución corrida en una
+      rama de otro proyecto que integra los mismos cambios de framework;
+      las otras 3 fallas del log — `test_smoke_audit_logs`,
+      `test_smoke_auth[SuperAdmin/Admin]` — pertenecen a endpoints de ese
+      otro proyecto, no a este change.)
+- [x] 3.4 Eliminar el test temporal agregado en 3.2.
+- [x] 3.5 Entregar al QA la salida de pytest y confirmación de lo
       observado en ambos navegadores. El change no se archiva sin
       retroalimentación explícita y positiva del QA (ver
       `openspec/config.yaml` — "Ciclo humano-en-medio").
+
+      Retroalimentación positiva recibida del QA en este hilo,
+      confirmando Firefox y Chrome/Brave.
