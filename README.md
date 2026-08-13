@@ -19,7 +19,9 @@ describe cómo **operar** el repo día a día.
 ## Prerrequisitos
 
 - **Node.js 18+** para la CLI de OpenSpec.
-- **Python 3.11+** para el framework de tests.
+- **Python 3.11+** para el framework de tests — o **Docker**, como
+  alternativa si Python no está disponible o no se ejecuta
+  correctamente en tu máquina (ver [Ejecutar con Docker](#ejecutar-con-docker)).
 - **Claude Code** instalado y autenticado.
 - Acceso al ambiente de pruebas del API (URL base + token admin) y a
   su base de datos (para aserciones de estado).
@@ -38,6 +40,7 @@ npm install -g @fission-ai/openspec@latest
 .
 ├── .claude/
 │   └── settings.json          # Permisos preaprobados para Claude Code
+├── .gitignore                 # Reglas de exclusión de git
 ├── openspec/
 │   ├── config.yaml            # Contexto y reglas inyectados en cada artefacto
 │   ├── specs/                 # Specs por endpoint (crecen con /opsx:archive)
@@ -52,8 +55,11 @@ npm install -g @fission-ai/openspec@latest
 ├── docs/
 │   └── generators-catalog.md  # Autogenerado desde src/framework/generators.py
 ├── reports/                   # Reportes HTML/JSON de cada ejecución (git-ignored)
-├── variables.yaml             # globals + test_cases + matrix_values
-├── .env.example               # Plantilla de secretos y URLs
+├── Dockerfile                 # Imagen alternativa a instalar Python local
+├── .dockerignore              # Exclusiones del build context (secretos, .venv, etc.)
+├── pyproject.toml             # Dependencias y config de pytest/ruff
+├── variables.yaml             # Variables no sensibles versionadas
+├── env.example                # Plantilla de secretos y URLs
 ├── .env                       # Secretos reales (git-ignored)
 ├── CLAUDE.md                  # Handoff de sesión para Claude Code
 └── README.md                  # (este archivo)
@@ -63,28 +69,62 @@ npm install -g @fission-ai/openspec@latest
 
 ## Setup inicial (una sola vez por clon)
 
-### 1. Clona e inicializa
+El framework (`pyproject.toml`, `src/framework/`, `tests/conftest.py`)
+ya está versionado en el repo — no hay que generarlo, solo instalarlo.
+
+### 1. Clona el repositorio
 
 ```bash
 git clone <repo>
 cd <repo>
-openspec init
 ```
 
-Si `openspec init` detecta que `openspec/config.yaml` ya existe, elige
-**"keep existing"**. Solo debe regenerar los archivos de skills para tu
-asistente de IA (Claude Code, Cursor, etc).
+Si es la primera vez que usas OpenSpec en esta máquina, instala la CLI
+(ver Prerrequisitos) y corre `openspec init`. Si detecta que
+`openspec/config.yaml` ya existe, elige **"keep existing"** — solo
+regenerará los archivos de skills para tu asistente de IA si faltan
+(en este repo ya están versionados en `.claude/`).
 
-### 2. Llena secretos
+### 2. Crea el entorno virtual e instala dependencias
+
+Usa siempre un entorno virtual — nunca instales el stack pinneado sobre
+el Python global de tu máquina.
 
 ```bash
-cp .env.example .env
+python -m venv .venv
+```
+
+Actívalo:
+
+```powershell
+# PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+```bash
+# Git Bash
+source .venv/Scripts/activate
+```
+
+Con el entorno activo (verás el prefijo `(.venv)` en el prompt), instala
+el proyecto en modo editable con las dependencias de runtime y dev:
+
+```bash
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+```
+
+### 3. Llena secretos
+
+```bash
+cp env.example .env
 ```
 
 Abre `.env` y reemplaza cada `[REQUIERE RESPUESTA: ...]` con el valor
-real del ambiente. **Nunca commitees `.env`** (ya está en `.gitignore`).
+real del ambiente (URL base, token admin, credenciales de BD). **Nunca
+commitees `.env`** (ya está en `.gitignore`).
 
-### 3. Llena variables versionadas
+### 4. Llena variables versionadas
 
 Abre `variables.yaml` y reemplaza cada `[REQUIERE RESPUESTA: ...]` con
 el valor sembrado en el ambiente de pruebas. Antes de cada `TC-XXX` está
@@ -92,261 +132,151 @@ la clave `seed:` que describe qué debe existir en la BD. La sección
 `matrix_values:` empieza vacía y se poblará al ejecutar el primer change
 de matriz.
 
-### 4. Bootstrap del framework — primer change proposal
+### 5. Verifica la instalación
 
-El repositorio arranca **sin código Python**. El framework se construye
-como el primer change de OpenSpec para que quede trazado y versionado.
-
-Abre Claude Code en la raíz del repo y en el chat escribe:
-
-```
-/opsx:propose add-test-framework-base
-```
-
-Y a continuación pega este prompt exactamente:
-
-<details>
-<summary><b>📋 Prompt de bootstrap (clic para expandir)</b></summary>
-
-````
-Necesito el bootstrap del framework de automatización de pruebas de APIs
-para este repositorio. Este es el PRIMER change proposal y su objetivo es
-crear el esqueleto sobre el cual todos los TC y matrices posteriores se
-implementarán. Basa todas las decisiones en `openspec/config.yaml`.
-
-# Alcance
-
-Crear:
-
-1. `pyproject.toml` con Python >= 3.11 y las siguientes dependencias
-   pinneadas exactas (no usar rangos ni `^`, `~`):
-
-   Runtime:
-   - pytest == 9.1.1
-   - pytest-html == 4.2.0
-   - pytest-check == 2.9.1
-   - pytest-json-report == 1.5.0
-   - httpx == 0.28.1
-   - sqlalchemy == 2.0.51
-   - pymysql[rsa] == 1.2.0
-   - pydantic == 2.13.4
-   - pydantic-settings == 2.14.2
-   - PyYAML (última estable menor)
-
-   Dev:
-   - ruff == 0.16.1
-
-2. Sección `[tool.pytest.ini_options]` en pyproject.toml con:
-   - addopts = "--strict-markers -ra --tb=short"
-   - testpaths = ["tests"]
-   - Marcadores registrados: tc(id), prioridad(nivel), criticidad(nivel),
-     tipo(clase), tecnica(nombre), rol(nombre), impacto(nivel), matriz(nombre).
-
-3. Estructura de carpetas y archivos:
-   src/framework/__init__.py
-   src/framework/config.py     # pydantic-settings + loader YAML
-   src/framework/http.py       # cliente httpx + cURL generator
-   src/framework/db.py         # engine SQLAlchemy Core con AUTOCOMMIT
-   src/framework/variables.py  # interpolación {{...}} con soporte MTZ-*
-   src/framework/matrix.py     # parser CSV `;`, transposición, IDs V/I
-   src/framework/generators.py # catálogo de generadores + CLI --catalog
-   src/framework/mirror.py     # assert de espejo por key JSON exacta
-   src/framework/reannotate.py # script CLI para reanotar la matriz CSV
-   tests/__init__.py
-   tests/conftest.py           # fixtures compartidos
-   docs/                       # carpeta para docs/generators-catalog.md
-
-4. `src/framework/config.py`:
-   - Clase `Settings(BaseSettings)` con
-     `model_config = SettingsConfigDict(env_file=".env", extra="ignore")`.
-   - Campos requeridos: GLB_URL_BASE (str), GLB_TOKEN_ADMIN (str),
-     DB_HOST (str), DB_PORT (int), DB_NAME (str), DB_USER (str),
-     DB_PASSWORD (str).
-   - Función `load_variables() -> dict` que lee `variables.yaml` desde
-     la raíz del proyecto y retorna el dict con secciones `globals`,
-     `test_cases` y `matrix_values`.
-
-5. `src/framework/variables.py`:
-   - Función `resolve(payload, tc_id=None) -> dict | str | list | int` que
-     acepta un payload (dict/str/list anidados) y sustituye placeholders
-     `{{nombre-var}}`. Orden de resolución según prefijo:
-       1. `GLB-*` → primero en `Settings` (guion → underscore, upper); si
-          no está, en `variables.yaml → globals`.
-       2. `TC-XXX-*` → solo se resuelve si el prefijo `TC-XXX` coincide
-          con el `tc_id` pasado; en caso contrario `KeyError` con mensaje
-          claro. Fuente: `variables.yaml → test_cases[TC-XXX].variables`.
-       3. `MTZ-*` → busca en `variables.yaml → matrix_values`. Si el
-          valor es un dict con keys `generator` y `params`, resuelve
-          invocando `getattr(framework.generators, generator)(**params)`
-          y retorna el valor generado. Si es literal, lo retorna.
-   - Detecta placeholders con regex `\{\{([A-Za-z0-9_-]+)\}\}`.
-   - Preserva el tipo cuando el placeholder ocupa el string completo
-     (ej: `"{{GLB-account_id_valido}}"` → int, no str).
-   - Lanza `KeyError` con mensaje claro si una variable no existe. Nunca
-     retorna el placeholder sin resolver.
-
-6. `src/framework/http.py`:
-   - Función `client(settings) -> httpx.Client` que devuelve un cliente
-     síncrono con `base_url=settings.GLB_URL_BASE` y timeout 30s.
-   - Función `to_curl(request: httpx.Request) -> str` que construye el
-     comando cURL equivalente con headers y body, para logging en fallos.
-
-7. `src/framework/db.py`:
-   - Función `engine(settings) -> sqlalchemy.Engine` que construye un
-     engine MySQL usando `pymysql`, con `isolation_level="AUTOCOMMIT"`.
-
-8. `src/framework/matrix.py`:
-   - Función `load_matrix(path: Path) -> MatrixData` que:
-     - Lee un CSV con separador `;`.
-     - Valida que existen las filas literales `Resultado` y
-       `Código HTTP esperado` (case-sensitive).
-     - Detecta las columnas y las clasifica según `Resultado`:
-       Éxito → grupo válidos (ids V1..Vn en orden posicional),
-       Error  → grupo inválidos (ids I1..In en orden posicional).
-   - `MatrixData` es un dataclass/pydantic model que expone
-     `cases: list[MatrixCase]` con orden [V1, V2, ..., Vn, I1, I2, ..., In].
-   - Cada `MatrixCase` tiene: `id: str` (V1/I3/etc), `fields: dict[str, Any]`
-     (por-campo el valor de la celda: literal directo o
-     `{ generator, params }`), `expected_status: int`,
-     `expected_result: Literal["Éxito", "Error"]`.
-   - Método `MatrixData.parametrize_args()` que retorna
-     `(argnames, argvalues, ids)` para usar directamente en
-     `pytest.mark.parametrize`.
-
-9. `src/framework/generators.py`:
-   - Set inicial de funciones (todas con docstring de una línea que
-     empieza con la abreviatura entre corchetes, para el catálogo):
-     - `int_min(min_val: int) -> int` — `[min] Retorna el valor mínimo permitido.`
-     - `int_max(max_val: int) -> int` — `[max] Retorna el valor máximo permitido.`
-     - `int_below_min(min_val: int) -> int` — `[outmin] Retorna min_val - 1.`
-     - `int_above_max(max_val: int) -> int` — `[outmax] Retorna max_val + 1.`
-     - `wrong_type_string(sample: str = "abc") -> str` — `[type] Retorna un string donde se esperaba entero.`
-     - `wrong_type_none() -> None` — `[null] Retorna None.`
-     - `empty_string() -> str` — `[empty] Retorna cadena vacía.`
-     - `regex_violating(regex: str, sample: str = "!!!") -> str` —
-       `[regex] Retorna un string que viola el regex dado.`
-     - `random_string(length: int) -> str` — `[len_min|len_max|len_outmax] String aleatorio de longitud exacta.`
-     - `len_below_min(min_len: int) -> str` — `[len_outmin] String de longitud min_len - 1.`
-     - `len_above_max(max_len: int) -> str` — `[len_outmax] String de longitud max_len + 1.`
-   - CLI: `python -m framework.generators --catalog` imprime a stdout un
-     Markdown con tabla `| Función | Abreviatura | Firma | Descripción |`
-     construida por introspección de las funciones del módulo (inspecciona
-     nombre, signature, y primer línea del docstring). Redirigir a
-     `docs/generators-catalog.md` para persistir.
-   - El catálogo NUNCA se edita a mano — su fuente de verdad son los
-     docstrings.
-
-10. `src/framework/mirror.py`:
-    - Función `assert_mirrored(request_payload: dict, response_json: dict, keys: list[str]) -> None`.
-    - Para cada `key` en `keys`:
-      - Si `key not in request_payload`: raise `KeyError` (bug del test).
-      - Si `key not in response_json`: skip silencioso (la doc declaró
-        la key pero la respuesta no la contiene como key JSON).
-      - Si ambas presentes: `pytest_check.check(
-        request_payload[key] == response_json[key],
-        f"mirror {key}: request={request_payload[key]} response={response_json[key]}")`.
-    - No hace match por substring bajo ninguna circunstancia.
-
-11. `src/framework/reannotate.py` como script CLI:
-    - Uso: `python -m framework.reannotate --matrix <ruta> --results <ruta>`.
-    - Lee `resultados.json` (pytest-json-report) y añade/actualiza en el
-      CSV las columnas o filas de trazabilidad. Mapeo:
-      - Nodeids que contengan `TC-XXX` → columna del CSV con ese TC en la
-        fila de trazabilidad (si aplica).
-      - Nodeids parametrizados de forma `test_matriz_<nombre>[V<n>]` y
-        `[I<n>]` → n-ésima columna del grupo válidos o inválidos del CSV
-        correspondiente (por posición).
-    - Actualiza `ultimo_resultado` (PASSED/FAILED/SKIPPED) y
-      `ultima_ejecucion` (ISO 8601) en cada columna probada.
-
-12. `tests/conftest.py` con fixtures:
-    - `settings` (scope=session)
-    - `http_client` (scope=session, yield con `.close()` al final)
-    - `db_conn` (scope=function, con `.close()` al final)
-    - `resolve_payload` (scope=function) → factory que dado un `tc_id`
-      retorna un callable equivalente a
-      `functools.partial(resolve, tc_id=tc_id)`.
-    - Hook `pytest_runtest_makereport` que en caso de fallo adjunta al
-      reporte HTML el cURL de la última request (leído de un atributo
-      del cliente) y detalles de las aserciones de pytest-check que
-      fallaron.
-
-13. Sección `[tool.ruff]` en pyproject.toml con:
-    - line-length = 100
-    - target-version = "py311"
-    - lint.select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-
-14. Un smoke test opcional `tests/test_smoke.py` que:
-    - Verifica que `Settings()` carga sin excepción (leyendo `.env`).
-    - Verifica que `load_variables()` retorna un dict con las tres
-      secciones `globals`, `test_cases` y `matrix_values`.
-    - Verifica que `matrix.load_matrix` no rompe con un CSV mínimo
-      inline (fixtura con StringIO).
-    - Verifica que `generators.int_above_max(10) == 11`.
-    - NO hace request HTTP ni consulta a BD.
-    - Marcado con `@pytest.mark.tc("SMOKE-001")`.
-
-15. Al finalizar la implementación, ejecutar como parte del change:
-    `python -m framework.generators --catalog > docs/generators-catalog.md`
-    y committear el archivo generado.
-
-# Fuera de alcance
-
-- No implementar ningún test contra endpoints reales. Los TC y matrices
-  específicos vendrán en changes posteriores (uno por TC, uno por CSV).
-- No hacer llamadas reales a APIs desde este change.
-- No modificar `variables.yaml`, `.env.example` ni `openspec/config.yaml`.
-
-# Aceptación
-
-- `pip install -e ".[dev]"` corre sin errores.
-- `pytest --collect-only` reporta al menos el smoke test.
-- `pytest tests/test_smoke.py -v` pasa (asumiendo `.env` completo).
-- `ruff check .` pasa limpio.
-- `python -c "from framework.config import Settings, load_variables;
-   from framework.variables import resolve;
-   from framework.matrix import load_matrix;
-   from framework.generators import int_above_max;
-   from framework.mirror import assert_mirrored; print('ok')"` imprime `ok`.
-- `python -m framework.generators --catalog | head -5` imprime la tabla
-  inicial del catálogo.
-- `docs/generators-catalog.md` existe y contiene una tabla con al menos
-  las 11 funciones del set inicial.
-````
-
-</details>
-
-Cuando Claude termine el proposal, revísalo
-(`openspec/changes/add-test-framework-base/`), ajusta lo que haga falta y
-lanza:
-
-```
-/opsx:apply
-```
-
-Al terminar, ejecuta manualmente:
+Con el entorno virtual activo y `.env` completo:
 
 ```bash
-pip install -e ".[dev]"
 pytest --collect-only
 pytest tests/test_smoke.py -v
 ruff check .
 python -m framework.generators --catalog > docs/generators-catalog.md
 ```
 
-Si todo pasa, responde a Claude "framework instalado, todo verde" y él
-archivará el change:
+Los tres deben pasar en verde. Si algo falla, revisa
+[Troubleshooting](#troubleshooting).
 
-```
-/opsx:archive
-```
+> **Nota histórica**: el framework se construyó como el primer change
+> proposal de OpenSpec (`add-test-framework-base`), para quedar trazado
+> y versionado en vez de venir precargado. El proposal, su design.md y
+> tasks.md quedaron archivados en
+> `openspec/changes/archive/2026-08-06-add-test-framework-base/` — no
+> necesitas volver a ejecutarlo en un clon nuevo; solo instalar y
+> configurar como arriba.
 
-Commit:
+---
+
+## Ejecutar con Docker
+
+Alternativa al setup con `venv` (pasos 1-2 de arriba) si Python 3.11+
+no está instalado o no se ejecuta correctamente en tu máquina. El
+contenedor **no usa `venv`** — instala el stack directamente en su
+Python de sistema, ya que el propio contenedor es el aislamiento.
+
+Los pasos 3 y 4 del setup (`.env` y `variables.yaml`) siguen aplicando
+igual: se editan en tu máquina host, no dentro del contenedor.
+
+### 1. Construye la imagen (una vez, y cada vez que cambie `pyproject.toml`)
 
 ```bash
-git add .
-git commit -m "chore: bootstrap framework base (add-test-framework-base)"
+docker build -t api-test-framework .
 ```
+
+### 2. Llena `.env` y `variables.yaml` en el host
+
+Sigue los pasos [3](#3-llena-secretos) y [4](#4-llena-variables-versionadas)
+de arriba tal cual, sobre los archivos del repo en tu máquina.
+
+### 3. Entra al contenedor
+
+```bash
+docker run -it --rm \
+    --env-file .env \
+    -v "$(pwd):/app" \
+    api-test-framework
+```
+
+- `--env-file .env` inyecta los secretos como variables de entorno del
+  proceso — `pydantic-settings` los lee igual que en local. El archivo
+  nunca se copia dentro de la imagen.
+- `-v "$(pwd):/app"` monta todo el repo sobre `/app`, así `tests/`,
+  `variables.yaml` y `reports/` se comparten en ambas direcciones sin
+  reconstruir la imagen.
+- En PowerShell, reemplaza `$(pwd)` por `${PWD}`.
+
+Dentro del contenedor caes en un shell (`bash`) con el paquete ya
+instalado en modo editable. Corre los mismos comandos de siempre:
+
+```bash
+pytest --collect-only
+pytest --stepwise -k "TC-001" -v
+pytest --last-failed -v
+ruff check --fix . && ruff format .
+```
+
+Los reportes y la matriz reanotada quedan en tu host al salir del
+contenedor, porque son el mismo archivo (bind mount), no una copia.
+
+### 4. Sal del contenedor
+
+```bash
+exit
+```
+
+El contenedor se elimina solo (`--rm`); la imagen queda cacheada para
+la próxima vez.
+
+---
+
+## Ejecutar con Docker
+
+Alternativa al setup con `venv` (pasos 1-2 de arriba) si Python 3.11+
+no está instalado o no se ejecuta correctamente en tu máquina. El
+contenedor **no usa `venv`** — instala el stack directamente en su
+Python de sistema, ya que el propio contenedor es el aislamiento.
+
+Los pasos 3 y 4 del setup (`.env` y `variables.yaml`) siguen aplicando
+igual: se editan en tu máquina host, no dentro del contenedor.
+
+### 1. Construye la imagen (una vez, y cada vez que cambie `pyproject.toml`)
+
+```bash
+docker build -t api-test-framework .
+```
+
+### 2. Llena `.env` y `variables.yaml` en el host
+
+Sigue los pasos [3](#3-llena-secretos) y [4](#4-llena-variables-versionadas)
+de arriba tal cual, sobre los archivos del repo en tu máquina.
+
+### 3. Entra al contenedor
+
+```bash
+docker run -it --rm \
+    --env-file .env \
+    -v "$(pwd):/app" \
+    api-test-framework
+```
+
+- `--env-file .env` inyecta los secretos como variables de entorno del
+  proceso — `pydantic-settings` los lee igual que en local. El archivo
+  nunca se copia dentro de la imagen.
+- `-v "$(pwd):/app"` monta todo el repo sobre `/app`, así `tests/`,
+  `variables.yaml` y `reports/` se comparten en ambas direcciones sin
+  reconstruir la imagen.
+- En PowerShell, reemplaza `$(pwd)` por `${PWD}`.
+
+Dentro del contenedor caes en un shell (`bash`) con el paquete ya
+instalado en modo editable. Corre los mismos comandos de siempre:
+
+```bash
+pytest --collect-only
+pytest --stepwise -k "TC-001" -v
+pytest --last-failed -v
+ruff check --fix . && ruff format .
+```
+
+Los reportes y la matriz reanotada quedan en tu host al salir del
+contenedor, porque son el mismo archivo (bind mount), no una copia.
+
+### 4. Sal del contenedor
+
+```bash
+exit
+```
+
+El contenedor se elimina solo (`--rm`); la imagen queda cacheada para
+la próxima vez.
 
 ---
 
@@ -418,7 +348,7 @@ AAA + una tarea final bloqueante de ejecución).
 
 Abre `openspec/changes/add-test-.../proposal.md` y `tasks.md`. Verifica:
 
-- Que las variables listadas existen en `variables.yaml` o `.env.example`.
+- Que las variables listadas existen en `variables.yaml` o `env.example`.
 - Que cada assert del AAA está representado como tarea.
 - Que la citación de `CA-XX` / `F1.RNX` corresponde.
 - Que no hay literales de negocio en el diseño.

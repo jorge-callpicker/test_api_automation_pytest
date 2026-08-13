@@ -8,7 +8,14 @@ TIMEOUT_SECONDS = 30.0
 
 
 def client(settings: Settings) -> httpx.Client:
-    return httpx.Client(base_url=settings.GLB_URL_BASE, timeout=TIMEOUT_SECONDS)
+    instance = httpx.Client(base_url=settings.GLB_URL_BASE, timeout=TIMEOUT_SECONDS)
+    instance.last_request = None
+
+    def _track_last_request(request: httpx.Request) -> None:
+        instance.last_request = request
+
+    instance.event_hooks["request"] = [_track_last_request]
+    return instance
 
 
 def to_curl(request: httpx.Request) -> str:

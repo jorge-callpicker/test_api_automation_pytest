@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+from html import escape
 
 import pytest
 
@@ -28,7 +29,6 @@ def settings() -> Settings:
 @pytest.fixture(scope="session")
 def http_client(settings: Settings):
     test_client = build_client(settings)
-    test_client.last_request = None
     yield test_client
     test_client.close()
 
@@ -60,18 +60,20 @@ def pytest_runtest_makereport(item, call):
     if pytest_html is None:
         return
 
-    extra = getattr(report, "extra", [])
+    extra = getattr(report, "extras", [])
 
     http_client_ = item.funcargs.get("http_client")
     last_request = getattr(http_client_, "last_request", None) if http_client_ else None
     if last_request is not None:
-        extra.append(pytest_html.extras.text(to_curl(last_request), name="cURL (ultima request)"))
+        curl = escape(to_curl(last_request))
+        extra.append(pytest_html.extras.html(f"<h4>cURL (ultima request)</h4><pre>{curl}</pre>"))
 
     if call.excinfo is not None:
+        failure = escape(str(call.excinfo.value))
         extra.append(
-            pytest_html.extras.text(
-                str(call.excinfo.value), name="Aserciones de pytest-check fallidas"
+            pytest_html.extras.html(
+                f"<h4>Aserciones de pytest-check fallidas</h4><pre>{failure}</pre>"
             )
         )
 
-    report.extra = extra
+    report.extras = extra

@@ -4,6 +4,10 @@ Este archivo se lee automáticamente al inicio de cada sesión de Claude Code.
 Complementa `openspec/config.yaml` — **no repite** información ya declarada
 allí. Si hay conflicto, `openspec/config.yaml` gana.
 
+## Instrucciones iniciales
+- Habla y responde en español
+- El idioma para trabajar OpenSpec tambien es español
+
 ## Contexto rápido
 
 Repositorio de automatización de pruebas para APIs REST usando OpenSpec
