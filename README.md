@@ -25,7 +25,9 @@ describe cómo **operar** el repo día a día.
 ## Prerrequisitos
 
 - **Node.js 18+** para la CLI de OpenSpec.
-- **Python 3.11+** para el framework de tests.
+- **Python 3.11+** para el framework de tests — o **Docker**, como
+  alternativa si Python no está disponible o no se ejecuta
+  correctamente en tu máquina (ver [Ejecutar con Docker](#ejecutar-con-docker)).
 - **Claude Code** instalado y autenticado.
 - Acceso al ambiente de pruebas del API (URL base + token admin) y a
   su base de datos (para aserciones de estado).
@@ -44,6 +46,7 @@ npm install -g @fission-ai/openspec@latest
 .
 ├── .claude/
 │   └── settings.json          # Permisos preaprobados para Claude Code
+├── .gitignore                 # Reglas de exclusión de git
 ├── openspec/
 │   ├── config.yaml            # Contexto y reglas inyectados en cada artefacto
 │   ├── specs/                 # Specs por endpoint (crecen con /opsx:archive)
@@ -61,8 +64,11 @@ npm install -g @fission-ai/openspec@latest
 ├── docs/
 │   └── generators-catalog.md  # Autogenerado desde src/framework/generators.py
 ├── reports/                   # Reportes HTML/JSON de cada ejecución (git-ignored)
-├── variables.yaml             # globals + test_cases + matrix_values
-├── .env.example               # Plantilla de secretos y URLs
+├── Dockerfile                 # Imagen alternativa a instalar Python local
+├── .dockerignore              # Exclusiones del build context (secretos, .venv, etc.)
+├── pyproject.toml             # Dependencias y config de pytest/ruff
+├── variables.yaml             # Variables no sensibles versionadas
+├── env.example                # Plantilla de secretos y URLs
 ├── .env                       # Secretos reales (git-ignored)
 ├── CLAUDE.md                  # Handoff de sesión para Claude Code
 └── README.md                  # (este archivo)
@@ -72,28 +78,62 @@ npm install -g @fission-ai/openspec@latest
 
 ## Setup inicial (una sola vez por clon)
 
-### 1. Clona e inicializa
+El framework (`pyproject.toml`, `src/framework/`, `tests/conftest.py`)
+ya está versionado en el repo — no hay que generarlo, solo instalarlo.
+
+### 1. Clona el repositorio
 
 ```bash
 git clone <repo>
 cd <repo>
-openspec init
 ```
 
-Si `openspec init` detecta que `openspec/config.yaml` ya existe, elige
-**"keep existing"**. Solo debe regenerar los archivos de skills para tu
-asistente de IA (Claude Code, Cursor, etc).
+Si es la primera vez que usas OpenSpec en esta máquina, instala la CLI
+(ver Prerrequisitos) y corre `openspec init`. Si detecta que
+`openspec/config.yaml` ya existe, elige **"keep existing"** — solo
+regenerará los archivos de skills para tu asistente de IA si faltan
+(en este repo ya están versionados en `.claude/`).
 
-### 2. Llena secretos
+### 2. Crea el entorno virtual e instala dependencias
+
+Usa siempre un entorno virtual — nunca instales el stack pinneado sobre
+el Python global de tu máquina.
 
 ```bash
-cp .env.example .env
+python -m venv .venv
+```
+
+Actívalo:
+
+```powershell
+# PowerShell
+.venv\Scripts\Activate.ps1
+```
+
+```bash
+# Git Bash
+source .venv/Scripts/activate
+```
+
+Con el entorno activo (verás el prefijo `(.venv)` en el prompt), instala
+el proyecto en modo editable con las dependencias de runtime y dev:
+
+```bash
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+```
+
+### 3. Llena secretos
+
+```bash
+cp env.example .env
 ```
 
 Abre `.env` y reemplaza cada `[REQUIERE RESPUESTA: ...]` con el valor
-real del ambiente. **Nunca commitees `.env`** (ya está en `.gitignore`).
+real del ambiente (URL base, token admin, credenciales de BD). **Nunca
+commitees `.env`** (ya está en `.gitignore`).
 
-### 3. Llena variables versionadas
+### 4. Llena variables versionadas
 
 Abre `variables.yaml` y reemplaza cada `[REQUIERE RESPUESTA: ...]` con
 el valor sembrado en el ambiente de pruebas. Antes de cada `TC-XXX` está
@@ -101,7 +141,7 @@ la clave `seed:` que describe qué debe existir en la BD. La sección
 `matrix_values:` empieza vacía y se poblará al ejecutar el primer change
 de matriz.
 
-### 4. Bootstrap del framework — primer change proposal
+### 5. Verifica la instalación
 
 El repositorio arranca **sin código Python**. El framework se construye
 como el primer change de OpenSpec para que quede trazado y versionado.
@@ -344,26 +384,84 @@ lanza:
 Al terminar, ejecuta manualmente:
 
 ```bash
-pip install -e ".[dev]"
 pytest --collect-only
 pytest tests/test_smoke.py -v
 ruff check .
 python -m framework.generators --catalog > docs/generators-catalog.md
 ```
 
-Si todo pasa, responde a Claude "framework instalado, todo verde" y él
-archivará el change:
+Los tres deben pasar en verde. Si algo falla, revisa
+[Troubleshooting](#troubleshooting).
 
-```
-/opsx:archive
-```
+> **Nota histórica**: el framework se construyó como el primer change
+> proposal de OpenSpec (`add-test-framework-base`), para quedar trazado
+> y versionado en vez de venir precargado. El proposal, su design.md y
+> tasks.md quedaron archivados en
+> `openspec/changes/archive/2026-08-06-add-test-framework-base/` — no
+> necesitas volver a ejecutarlo en un clon nuevo; solo instalar y
+> configurar como arriba.
 
-Commit:
+---
+
+## Ejecutar con Docker
+
+Alternativa al setup con `venv` (pasos 1-2 de arriba) si Python 3.11+
+no está instalado o no se ejecuta correctamente en tu máquina. El
+contenedor **no usa `venv`** — instala el stack directamente en su
+Python de sistema, ya que el propio contenedor es el aislamiento.
+
+Los pasos 3 y 4 del setup (`.env` y `variables.yaml`) siguen aplicando
+igual: se editan en tu máquina host, no dentro del contenedor.
+
+### 1. Construye la imagen (una vez, y cada vez que cambie `pyproject.toml`)
 
 ```bash
-git add .
-git commit -m "chore: bootstrap framework base (add-test-framework-base)"
+docker build -t api-test-framework .
 ```
+
+### 2. Llena `.env` y `variables.yaml` en el host
+
+Sigue los pasos [3](#3-llena-secretos) y [4](#4-llena-variables-versionadas)
+de arriba tal cual, sobre los archivos del repo en tu máquina.
+
+### 3. Entra al contenedor
+
+```bash
+docker run -it --rm \
+    --env-file .env \
+    -v "$(pwd):/app" \
+    api-test-framework
+```
+
+- `--env-file .env` inyecta los secretos como variables de entorno del
+  proceso — `pydantic-settings` los lee igual que en local. El archivo
+  nunca se copia dentro de la imagen.
+- `-v "$(pwd):/app"` monta todo el repo sobre `/app`, así `tests/`,
+  `variables.yaml` y `reports/` se comparten en ambas direcciones sin
+  reconstruir la imagen.
+- En PowerShell, reemplaza `$(pwd)` por `${PWD}`.
+
+Dentro del contenedor caes en un shell (`bash`) con el paquete ya
+instalado en modo editable. Corre los mismos comandos de siempre:
+
+```bash
+pytest --collect-only
+pytest --stepwise -k "TC-001" -v
+pytest --last-failed -v
+ruff check --fix . && ruff format .
+```
+
+Los reportes y la matriz reanotada quedan en tu host al salir del
+contenedor, porque son el mismo archivo (bind mount), no una copia.
+
+### 4. Sal del contenedor
+
+```bash
+exit
+```
+
+El contenedor se elimina solo (`--rm`); la imagen queda cacheada para
+la próxima vez.
 
 ---
 
@@ -576,7 +674,7 @@ AAA + una tarea final bloqueante de ejecución).
 
 Abre `openspec/changes/add-test-.../proposal.md` y `tasks.md`. Verifica:
 
-- Que las variables listadas existen en `variables.yaml` o `.env.example`.
+- Que las variables listadas existen en `variables.yaml` o `env.example`.
 - Que cada assert del AAA está representado como tarea.
 - Que la citación de `CA-XX` / `F1.RNX` corresponde.
 - Que no hay literales de negocio en el diseño.
