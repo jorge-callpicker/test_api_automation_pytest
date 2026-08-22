@@ -9,27 +9,38 @@ context: |
 
   # Roles de los artefactos de entrada
 
-  Cada endpoint del API bajo prueba tiene tres artefactos en
-  `inputs/<endpoint>/`. Los tres se consultan para diseñar, pero solo dos
-  producen código de test:
+  Cada endpoint del API bajo prueba tiene sus artefactos en
+  `inputs/<endpoint-slug>/`. Todos se consultan para diseñar, pero solo dos
+  tipos producen código de test:
 
   - `docs.md` — contrato del endpoint (rutas, validaciones, respuestas
-    HTTP). **No es codificable**. Es fuente de verdad para códigos HTTP,
-    reglas de validación, estructura de respuesta y — mediante la sección
-    `## Mirror keys en respuesta` — para declarar qué keys del request se
-    espejan como key JSON en la respuesta (ver "Assert de espejo").
-  - `matriz-raiz.csv` (+ `matriz-<objeto-anidado>.csv` cuando aplique) —
-    **Sí es codificable**. Matriz de particiones de equivalencia y valores
-    límite: **una columna es un caso de prueba**. Estructura: campo por
-    fila, combinación por columna, separador `;`. Dos grupos de columnas:
-    válidos (`V1..Vn`) e inválidos (`I1..In`), separados por las filas
-    finales `Resultado` (Éxito/Error) y `Código HTTP esperado`. Las celdas
-    contienen valores literales o indicaciones en lenguaje natural entre
-    paréntesis (ej. `(entero fuera de rango superior)`).
+    HTTP). **No es codificable**, pero es **obligatorio**: sin él no se
+    propone ninguna matriz. Es fuente de verdad para códigos HTTP, reglas de
+    validación, estructura de la petición base, el mapeo entre el slug corto
+    del endpoint y el nombre largo del proyecto generador, y — mediante la
+    sección `## Mirror keys en respuesta` — para declarar qué keys del
+    request se espejan como key JSON en la respuesta (ver "Assert de
+    espejo"). Como el `-refinamiento.md` del proyecto generador **no se
+    versiona en este repositorio**, `docs.md` es el único portador en-repo de
+    las reglas de validación del endpoint.
+  - `matriz-<nombre>.csv` — **Sí es codificable**. Matriz de particiones de
+    equivalencia y valores límite, producida por el proyecto generador de
+    EP+BVA y ya pasada por su fase de limpieza. **Una fila es un caso de
+    prueba**; una columna es un campo. Formato completo en "Formato del CSV
+    de matriz". Hay varios por endpoint, uno por contexto de aplicación —
+    ver "Contextos de aplicación".
   - `casos-prueba.md` — **Sí es codificable**. Casos priorizados en formato
     AAA con IDs `TC-XXX`, resultado de aplicar tabla de decisión,
     transición de estados, pairwise y priorización por riesgo sobre el
     requerimiento refinado.
+  - `hallazgos.md` — registro de discrepancias reales entre el endpoint y la
+    matriz. Se crea cuando aparece la primera. Ver "Hallazgos".
+
+  El `<endpoint>-refinamiento.md` del proyecto generador es la memoria del
+  proceso de derivación (contextos, valores por campo, preguntas abiertas,
+  registro de cambios). **No se copia aquí**: se referencia por ruta desde
+  `docs.md`. Si hace falta justificar por qué existe un caso, se consulta
+  allí.
 
   # Dos tipos de change proposal
 
@@ -39,9 +50,10 @@ context: |
   - `add-test-<endpoint>-tc-<nnn>` — un solo `TC-XXX` del `casos-prueba.md`.
     Uno por TC. Formato AAA. Puede requerir seed de BD.
   - `add-test-<endpoint>-matriz-<nombre>` — una matriz CSV completa. El
-    `<nombre>` es `raiz` o el nombre del objeto anidado. Uno por CSV. Todos
-    los casos (`V1..Vn`, `I1..In`) se implementan como un único test
-    parametrizado con `pytest.mark.parametrize` en una sola iteración.
+    `<nombre>` es el sufijo del CSV: un contexto de aplicación, el nombre de
+    un objeto anidado, o `cruzada` (ver "Contextos de aplicación"). Uno por
+    CSV. Todos los casos (`V1..Vn`, `I1..In`) se implementan como un único
+    test parametrizado con `pytest.mark.parametrize` en una sola iteración.
   - `add-test-framework-base` y otros de infraestructura — construyen o
     modifican `src/framework/`. Distinguibles porque no siguen ninguno de
     los dos patrones anteriores.
@@ -78,13 +90,13 @@ context: |
   - `variables.yaml → test_cases.TC-XXX:` (versionado) — datos específicos
     de un TC del `.md` AAA: `TC-XXX-<nombre>`.
   - `variables.yaml → matrix_values:` (versionado) — valores usados por
-    tests de matriz CSV: `MTZ-<endpoint>-<campo>-<abreviatura>`.
+    tests de matriz CSV: `MTZ-<endpoint>-<campo>-<indicacion>`.
 
   Prefijos y alcance:
 
   - `GLB-*` → aplica a todos los tests del proyecto.
   - `TC-XXX-*` → aplica exclusivamente al caso `TC-XXX` del `.md` AAA.
-  - `MTZ-<endpoint>-<campo>-<abreviatura>` → aplica a la matriz de un
+  - `MTZ-<endpoint>-<campo>-<indicacion>` → aplica a la matriz de un
     endpoint específico. El prefijo `MTZ-` es **obligatorio** aunque el
     resto del nombre ya identifique al endpoint — sirve como señal
     inmediata al leer un test de que el valor proviene de matriz.
@@ -93,23 +105,152 @@ context: |
   (guion → underscore, upper). No aplica a `MTZ-*` ni `TC-XXX-*` (siempre
   en `variables.yaml`, nunca en `.env`).
 
-  # Convención de variables MTZ para la matriz
+  # Formato del CSV de matriz
 
-  Cada valor literal encontrado en las celdas del CSV se registra como una
-  variable en `variables.yaml → matrix_values:` con la nomenclatura
+  Los CSV los produce el proyecto generador de particiones de equivalencia y
+  valores límite, y llegan aquí **ya limpios** (sin los IDs de valor que ese
+  proyecto emite antes de su fase de limpieza). Estructura, toda ella
   obligatoria:
 
-      MTZ-<endpoint-slug>-<nombre_campo>-<abreviatura_indicacion>
+  - Separador `;`. Codificación **UTF-8 con BOM** — hay que abrir con
+    `utf-8-sig`, o el nombre de la primera columna llega como `﻿Campo`.
+  - **Una fila es un caso de prueba. Una columna es un campo.**
+  - Columna 1: `Campo`. Contiene el número consecutivo del caso en las filas
+    de caso, y el nombre del metadato en las filas de metadatos.
+  - Penúltima columna: `Código HTTP Esperado`. Última columna: `Prioridad`.
+  - Tras el encabezado, tres filas de metadatos por campo, en este orden:
+
+    | Fila              | Valores                                          |
+    |-------------------|--------------------------------------------------|
+    | `¿Requerido?`     | `Sí` / `No` / `Condicional`                      |
+    | `Tipo Validación` | `Independiente` / `Cruzada`                      |
+    | `Tipo de Dato`    | `Integer`, `String`, `String (arreglo JSON)`, …  |
+
+    En estas tres filas, `Código HTTP Esperado` y `Prioridad` van vacías.
+
+  - Las filas de caso que prueban una violación de regla cruzada llevan un
+    sufijo en su celda de la columna `Campo`, con la forma
+    `N (cruzada: campoA+campoB)`. El número del caso es `N`; los campos
+    listados son los que se violan en conjunto.
+  - Las celdas contienen valores literales (`65`, `MARKETING`, `es_MX`) o
+    indicaciones en lenguaje natural entre paréntesis
+    (ej. `(2147483649 — máximo del rango más 1)`).
+
+  Ejemplo mínimo:
+
+      Campo;account_id;name;Código HTTP Esperado;Prioridad
+      ¿Requerido?;Sí;Sí;;
+      Tipo Validación;Independiente;Independiente;;
+      Tipo de Dato;Integer;String;;
+      1;65;(3 caracteres en minúsculas — longitud mínima);200;alto
+      2;(cero — mínimo del rango menos 1);(nombre típico);400;alto
+
+  La columna `Prioridad` (`alto` / `medio` / `bajo`) es metadato de
+  **implementación, no de ejecución**: ordena en qué secuencia se escriben y
+  revisan los casos, y se registra en el inventario del proposal. No genera
+  markers de pytest y no se usa para filtrar corridas.
+
+  # Contextos de aplicación
+
+  Un **contexto** es un conjunto de condiciones bajo el cual el conjunto de
+  campos aplicables es fijo. Existen por los campos condicionales: si `file`
+  está prohibido cuando `type` es `TEXT`, ese campo no tiene valor válido en
+  ese escenario — solo admite `(ausente)`.
+
+  Por eso un endpoint tiene **varios CSV, no un `matriz-raiz.csv` único**:
+
+  - Uno por contexto de aplicación — `matriz-c1-<nombre>.csv`,
+    `matriz-c2-<nombre>.csv`, … Si el endpoint no tiene campos
+    condicionales, hay un solo contexto y se llama `raiz`.
+  - Uno por objeto anidado — `matriz-<objeto>.csv`. Sus columnas usan la
+    notación del generador: `buttons[].type`, `buttons[].payload`.
+  - Uno de validación cruzada — `matriz-cruzada.csv`.
+
+  El `<nombre>` que aparece en el nombre del change, en el nombre del test y
+  en los comandos de ejecución es ese sufijo: un contexto, un objeto anidado
+  o `cruzada`.
+
+  **Cada matriz construye su petición solo con sus propias columnas.** Los
+  conjuntos de campos difieren entre contextos y eso es correcto por
+  definición — mezclarlos produciría columnas contaminadas, donde el fallo no
+  es atribuible al campo bajo prueba.
+
+  # Derivación de los ids V/I
+
+  El CSV limpio no trae fila `Resultado` ni ids de caso. Ambos se derivan de
+  la columna `Código HTTP Esperado`, que cumple el rol de `Resultado`:
+
+  - `Código HTTP Esperado < 400` → **caso de éxito**. Recibe id `V1..Vn`.
+    Incluye el `206` de éxito parcial.
+  - `Código HTTP Esperado >= 400` → **caso de error**. Recibe id `I1..In`.
+
+  La numeración es **posicional dentro de su grupo**, siguiendo el orden de
+  aparición de las filas en el CSV. El número original de la columna `Campo`
+  se conserva como metadato del caso, para poder trazar contra el
+  `-refinamiento.md` del proyecto generador.
+
+  Consecuencia de que la identidad sea posicional: si el CSV se regenera y
+  cambia el número de filas de un grupo, los ids se corren. Las anotaciones
+  de corridas anteriores dejan de ser válidas y hay que volver a ejecutar.
+
+  # Construcción de la petición
+
+  El modelo construye una **petición base válida** para el contexto a partir
+  de `docs.md`, y cada caso de la matriz es esa petición base más la
+  desviación que declara su fila. La estructura sale de `docs.md`; los
+  valores **siempre** se referencian con `{{...}}` y se resuelven desde
+  `variables.yaml` o `.env` — cero literales de negocio en el código.
+
+  Semántica obligatoria de las celdas:
+
+  - `(ausente)` — el campo **no se envía**: la key no se emite en el
+    payload. No es `null`.
+  - `(vacío)` — la key **sí** se emite, con string vacío `""`.
+  - Los campos cuyo `Tipo de Dato` es `String (arreglo JSON)` viajan
+    **serializados como string**, no como arreglo JSON nativo. Es decir
+    `"apps": "[\"uuid\"]"`, no `"apps": ["uuid"]`. Esto es lo que hace
+    verificable un caso como `(string de 1 carácter — mínimo de 2 caracteres
+    del string serializado menos 1)`: los dos caracteres mínimos son los
+    corchetes de `[]`.
+  - La coerción de tipo se hace según la fila `Tipo de Dato`, pero **debe
+    poder no aplicarse**: casos como `(texto no numérico)` o `(número
+    decimal dentro del rango)` en un campo `Integer` son inválidos a
+    propósito, y su valor viaja tal cual.
+
+  Para las matrices de objeto anidado, el CSV solo trae las columnas del
+  objeto. La petición padre válida se declara en
+  `variables.yaml → globals:` y se reutiliza en todas las filas de esa
+  matriz.
+
+  # Convención de variables MTZ para la matriz
+
+  Cada valor de celda que se materializa se registra como una variable en
+  `variables.yaml → matrix_values:` con la nomenclatura obligatoria:
+
+      MTZ-<endpoint-slug>-<nombre_campo>-<slug_indicacion>
 
   Donde:
 
-  - `<endpoint-slug>` es el mismo slug de `inputs/<endpoint-slug>/`.
-  - `<nombre_campo>` es el nombre exacto del campo del request (fila del CSV).
-  - `<abreviatura_indicacion>` viene del catálogo fijo cuando aplique, o
-    es propuesta por el modelo con comentario extendido cuando la
-    indicación sea novedosa.
+  - `<endpoint-slug>` es el mismo slug de `inputs/<endpoint-slug>/`, y es
+    **corto**. Los CSV del proyecto generador traen nombres largos
+    (ej. `integrations-gupshup_integrations-templates-create`); aquí se usa
+    la forma corta (`templates-create`) y el mapeo entre ambos se declara en
+    `docs.md`. Sin esto los nombres de variable superan los 90 caracteres.
+  - `<nombre_campo>` es el nombre del campo del request, tomado del
+    encabezado de su columna. Los campos anidados se transliteran quitando
+    la notación del generador: `buttons[].type` → `buttons_type`,
+    `buttons[].payload` → `buttons_payload`.
+  - `<slug_indicacion>` identifica el valor dentro de ese campo. Tras la
+    limpieza del CSV, el par **(campo, texto de la celda)** es la identidad
+    única del valor — el proyecto generador lo garantiza —, así que el slug
+    se deriva del texto de la celda: minúsculas, sin acentos, palabras
+    separadas por `_`, truncado a las primeras palabras significativas.
 
-  Catálogo fijo de abreviaturas (usar estas cuando la indicación aplique):
+  El catálogo de abreviaturas de abajo es **preferente, no obligatorio**:
+  úsalo cuando la indicación encaje limpiamente en una de sus entradas. No
+  alcanza para cubrir una matriz real — un solo campo puede tener más de diez
+  valores distintos, y forzarlos al catálogo produce colisiones. Cuando
+  ninguna aplique, deriva el slug del texto de la celda.
 
   | Abreviatura   | Significado                                        |
   |---------------|----------------------------------------------------|
@@ -119,7 +260,8 @@ context: |
   | `outmin`      | Valor justo por debajo del mínimo (inválido)       |
   | `outmax`      | Valor justo por encima del máximo (inválido)       |
   | `type`        | Valor de tipo de dato incorrecto                   |
-  | `null`        | Valor nulo/None/ausencia del campo                 |
+  | `null`        | Valor `null`/`None` explícito                      |
+  | `omit`        | Campo ausente: la key no se emite                  |
   | `empty`       | String vacío                                       |
   | `regex`       | Valor que viola el regex de validación             |
   | `len_min`     | Longitud mínima permitida (borde válido)           |
@@ -129,36 +271,60 @@ context: |
   | `wl`          | Valor de la lista blanca (whitelist válida)        |
   | `outwl`       | Valor fuera de la lista blanca                     |
 
+  `null` y `omit` son **distintos**: `null` emite la key con valor nulo,
+  `omit` no emite la key. Ver "Construcción de la petición".
+
   Toda variable `MTZ-*` en `variables.yaml` lleva un comentario en la línea
   anterior con la indicación original del CSV entre paréntesis. Ejemplo:
 
       matrix_values:
-        # (valor entero justo por encima del máximo permitido de 2147483648)
-        MTZ-templates-delete-account_id-outmax: 2147483649
+        # (2147483649 — máximo del rango más 1)
+        MTZ-templates-create-account_id-outmax: 2147483649
 
   # Resolución de valores en paréntesis de la matriz
 
-  Las celdas con descripciones entre paréntesis (ej. `(correo con formato
-  válido)`) se resuelven siguiendo una política híbrida:
+  Las celdas con descripciones entre paréntesis se resuelven por una de tres
+  rutas. La elección se documenta en el proposal.
 
-  - **Resolución estática (preferida por defecto)**: el modelo escoge un
-    valor concreto que satisface la indicación, lo registra como variable
-    `MTZ-*` en `variables.yaml` con el comentario correspondiente y el
-    test lo consume como literal. Aplica a valores límite, valores fuera
-    de rango específico, longitudes exactas y en general cualquier
-    indicación cuya cobertura no gane con variedad entre corridas.
-  - **Resolución en runtime (generador)**: cuando la indicación implique
-    variedad entre corridas (ej. `(cadena aleatoria de 500 caracteres)`,
-    `(correo con formato inválido variado)`), el test invoca una función
-    de `src/framework/generators.py`. La variable `MTZ-*` sigue existiendo
-    en `variables.yaml`, pero su valor es una referencia al generador con
-    parámetros, no un literal:
+  ## Ruta 1 — Resolución estática (preferida por defecto)
 
-        matrix_values:
-          # (cadena aleatoria de 500 caracteres, superando límite de 255)
-          MTZ-templates-create-name-len_outmax:
-            generator: random_string
-            params: { length: 500 }
+  El modelo escoge un valor concreto que satisface la indicación, lo registra
+  como variable `MTZ-*` en `variables.yaml → matrix_values:` con su
+  comentario, y el test lo consume como literal. Aplica a valores límite,
+  valores fuera de rango, longitudes exactas, listas blancas y en general
+  cualquier indicación cuya cobertura no gane con variedad entre corridas.
+
+  Caso particular: cuando la celda **ya contiene el literal** dentro del
+  paréntesis (ej. `(2147483649 — máximo del rango más 1)`, `(1 — mínimo del
+  rango)`), el modelo lo toma de ahí. `(cero)` se resuelve como `0`.
+
+  ## Ruta 2 — Resolución en runtime (generador)
+
+  El valor se produce en cada corrida invocando una función de
+  `src/framework/generators.py`. La variable `MTZ-*` sigue existiendo, pero
+  su valor es una referencia al generador con parámetros:
+
+      matrix_values:
+        # (3 caracteres en minúsculas — longitud mínima, no usado antes)
+        MTZ-templates-create-name-len_min:
+          generator: unique_lowercase
+          params: { length: 3 }
+
+  El disparador es **semántico, nunca por nombre de campo**. Estos cuatro, y
+  solo estos, obligan a runtime:
+
+  | Disparador   | Marca en la indicación                     | Ejemplo                                         |
+  |--------------|--------------------------------------------|-------------------------------------------------|
+  | Unicidad     | "no usado antes", "único", "que no exista" | `(3 caracteres en minúsculas, no usado antes)`   |
+  | Aleatoriedad | "aleatorio", "cualquier"                   | `(cualquier número mayor a 100 distinto del 65)` |
+  | Variedad     | "variado", "distinto en cada"              | `(correo con formato inválido variado)`          |
+  | Volumen      | longitud o cardinalidad alta con contenido indiferente | `(1025 caracteres — máximo más 1)`, `(11 botones)` |
+
+  Regla de mantenimiento: cuando aparezca una indicación que implique
+  resolución en runtime y no encaje en ninguno de los cuatro, **se amplía
+  esta tabla** como parte del change. No se resuelve ad hoc ni se
+  particulariza por nombre de campo — el criterio tiene que seguir sirviendo
+  para el endpoint que venga después.
 
   Regla dura: si el modelo añade un nuevo generador a
   `src/framework/generators.py`, el change **debe** incluir una tarea que
@@ -167,10 +333,35 @@ context: |
   catálogo tiene como fuente de verdad los docstrings de los generadores;
   nunca se edita a mano.
 
+  ## Ruta 3 — Resolución sembrada
+
+  Para indicaciones que no se satisfacen escogiendo un valor ni generándolo,
+  porque **dependen del estado del ambiente o de datos preexistentes**:
+
+      (token vigente de otra cuenta distinta a account_id)
+      (nombre de un template ya creado previamente en las mismas apps)
+      (arreglo JSON con un UUID de app deshabilitada)
+      (arreglo JSON con un UUID de app que pertenece a otra cuenta)
+      (1 — mínimo del rango, cuenta inexistente en el entorno de pruebas)
+
+  Estos valores **no van a `matrix_values:`**. Van a
+  `variables.yaml → globals:` como `GLB-*`, acompañados de un bloque `seed:`
+  que describe qué debe existir en el ambiente, y su valor inicial es un
+  placeholder `[REQUIERE RESPUESTA: ...]` que el QA reemplaza tras sembrar.
+  El change debe incluir una tarea explícita de siembra.
+
+  ## Regla de oro entre las tres rutas
+
+  Si dudas entre estática y runtime, elige **estática**: es más auditable y
+  determinística. Si la indicación menciona un dato que tiene que preexistir
+  en el ambiente, es **sembrada**.
+
   # Assert de espejo entrada → respuesta
 
-  Aplica **solo a casos de éxito** (columnas `V1..Vn` de la matriz, o TC
-  positivos del `.md` cuando declaren mirror keys). Regla de match:
+  Aplica **solo a casos de éxito** (filas `V1..Vn` de la matriz, o TC
+  positivos del `.md` cuando declaren mirror keys). Éxito se define por el
+  código HTTP: `status < 400`, lo que **incluye el `206`** de éxito parcial —
+  la respuesta parcial sí devuelve el recurso creado. Regla de match:
 
   - **Exclusivamente por key JSON exacta**. Si `template_id` está en el
     request y en `response.json()`, se valida que ambos valores coincidan.
@@ -212,8 +403,8 @@ context: |
 
   La bandera `-x` es **obligatoria** en corridas de matriz: corta al primer
   fallo del test parametrizado y reporta al desarrollador, sin gastar
-  tiempo en el resto de columnas del CSV. Sin `-x` el runner continuaría
-  con todas las columnas, saturando el reporte.
+  tiempo en el resto de filas del CSV. Sin `-x` el runner continuaría
+  con todas las filas, saturando el reporte.
 
   # Ciclo humano-en-medio (crítico)
 
@@ -233,9 +424,9 @@ context: |
 
   Bajo ninguna circunstancia Claude asume éxito de una ejecución sin
   retroalimentación explícita del QA. En changes de matriz, "éxito"
-  implica que **todas** las columnas parametrizadas pasaron (o que las que
-  fallaron fueron aceptadas por el QA como discrepancias del ambiente, no
-  del test).
+  implica que **todas** las filas parametrizadas pasaron (o que las que
+  fallaron fueron aceptadas por el QA como discrepancias del ambiente, o
+  marcadas como hallazgo con `xfail(strict=True)` — no del test).
 
   # Reporte y trazabilidad
 
@@ -244,39 +435,123 @@ context: |
   - `reports/report.html` — reporte HTML autocontenido (pytest-html).
   - `reports/resultados.json` — reporte JSON (pytest-json-report).
 
-  La matriz CSV en `inputs/<endpoint>/matriz-<nombre>.csv` se reanota con
-  el resultado pass/fail leyendo `resultados.json`. El mapeo:
+  Los resultados de matriz se anotan en un **sidecar**,
+  `reports/anotado-<nombre>.csv`. El CSV de entrada en
+  `inputs/<endpoint>/matriz-<nombre>.csv` **nunca se modifica**: es un
+  artefacto generado por otro proyecto, y escribirle encima lo desincroniza
+  de su fuente y hace que una regeneración pise las anotaciones.
 
-  - Nodeids que contengan `TC-XXX` → columna del CSV con ese TC en la fila
-    de trazabilidad (si aplica).
-  - Nodeids parametrizados con `[V1]`, `[V2]`, ..., `[I1]`, `[I2]`, ... →
-    columna correspondiente en el CSV de matriz (por posición: `V1` = primera
-    columna de válidos, `I1` = primera columna de inválidos).
+  El sidecar es el CSV de entrada con dos columnas añadidas al final,
+  `ultimo_resultado` y `ultima_ejecucion` (ISO 8601), escrito preservando el
+  BOM (`utf-8-sig`) para que siga abriéndose bien en Excel. El mapeo:
+
+  - Nodeids que contengan `TC-XXX` → la fila del CSV con ese TC en su columna
+    de trazabilidad, si la matriz la tiene.
+  - Nodeids parametrizados con `[V1]`, `[V2]`, ..., `[I1]`, `[I2]`, ... → la
+    fila correspondiente **por posición dentro de su grupo**: `V1` es la
+    primera fila con `Código HTTP Esperado < 400`, `I1` la primera con
+    `>= 400`.
+
+  Como la bandera `-x` es obligatoria en matrices (ver "Ejecución"), una
+  corrida típica solo anota hasta el primer fallo. Las filas que no llegaron
+  a ejecutarse quedan con `ultimo_resultado` vacío, y eso debe distinguirse
+  de un `SKIPPED`.
+
+  # Arquitectura objetivo — pendiente de implementación
+
+  La ruta de matriz **no es ejecutable todavía**. El change
+  `add-test-framework-base` quedó archivado incompleto y estos módulos no
+  están disponibles:
+
+  | Módulo                        | Rol                                          | Estado           |
+  |-------------------------------|----------------------------------------------|------------------|
+  | `src/framework/matrix.py`     | Parser del CSV, derivación de ids, metadatos | **No existe**    |
+  | `src/framework/generators.py` | Generadores + CLI `--catalog`                | **No existe**    |
+  | `src/framework/mirror.py`     | Assert de espejo por key JSON exacta         | **No existe**    |
+  | `src/framework/reannotate.py` | Sidecar de resultados                        | Existe, no sirve |
+
+  `reannotate.py` existe pero no implementa este contrato: usa el delimitador
+  por defecto en vez de `;`, abre con `utf-8` en vez de `utf-8-sig`, espera
+  una columna `TC`/`id` en vez de `Campo`, y no maneja nodeids parametrizados
+  `[V<n>]`/`[I<n>]`. Requiere reescritura.
+
+  **Freno duro**: mientras alguno de esos módulos siga pendiente, un change
+  de tipo matriz **no genera código de test**. El proposal se escribe, se
+  declara la dependencia faltante en `Why` y el change se detiene ahí. No se
+  escribe un test que no puede correr, ni se duplica la lógica de parseo
+  dentro del archivo de test para sortear la falta del módulo.
+
+  Este contrato es deliberadamente **agnóstico de la API de esos módulos**:
+  describe el formato del CSV y las reglas de interpretación, no las firmas.
+  El diseño de las firmas es alcance del change que los implemente.
+
+  # Hallazgos
+
+  Cuando un caso falla porque el endpoint se comporta distinto a lo que
+  declara la matriz o el `docs.md`, **no se ajusta el test para que pase**.
+  Se registra en dos lugares:
+
+  - En el código: `pytest.mark.xfail(strict=True, reason=...)` sobre el caso
+    parametrizado, citando en la razón el id (`V3`, `I17`) y la discrepancia
+    observada.
+  - En `inputs/<endpoint-slug>/hallazgos.md`: una entrada con el id del caso,
+    lo esperado por la matriz, lo observado, y la fecha.
+
+  `strict=True` es obligatorio: si el endpoint se corrige, el `xfail` pasa a
+  `XPASS` y falla la corrida, lo que obliga a revisar el hallazgo en vez de
+  dejarlo enterrado.
+
+  # Ingesta de artefactos
+
+  Los CSV se producen en el proyecto generador de EP+BVA y llegan aquí por
+  **copia manual**, tras pasar por la fase de limpieza de ese proyecto
+  (`limpiar-matriz.sh`). Un CSV que todavía traiga los IDs de valor en las
+  celdas (`account_id.I3 | (cero)`) **no está listo**: se devuelve para
+  limpiar.
+
+  Destino: `inputs/<endpoint-slug>/matriz-<nombre>.csv`, con el slug corto y
+  el sufijo del contexto. El nombre largo del archivo de origen se descarta;
+  su mapeo vive en `docs.md`.
+
+  Cada change de matriz registra en su `proposal.md` el **hash SHA-256 del
+  CSV** que implementó. Antes de proponer un change nuevo sobre el mismo
+  endpoint, se compara el hash del CSV en disco contra el del change
+  archivado: si difiere, el CSV se regeneró y los ids pueden haberse corrido
+  (ver "Derivación de los ids V/I").
 
 rules:
   proposal:
-    - "Existen dos tipos de change proposal que producen tests: `add-test-<endpoint>-tc-<nnn>` (un `TC-XXX` del `.md`) y `add-test-<endpoint>-matriz-<nombre>` (una matriz CSV completa donde `<nombre>` es `raiz` o el nombre de un objeto anidado). El proposal debe declarar en la sección `Why` cuál de los dos tipos aplica."
+    - "Existen dos tipos de change proposal que producen tests: `add-test-<endpoint>-tc-<nnn>` (un `TC-XXX` del `.md`) y `add-test-<endpoint>-matriz-<nombre>` (una matriz CSV completa donde `<nombre>` es un contexto de aplicación, el nombre de un objeto anidado, o `cruzada`). El proposal debe declarar en la sección `Why` cuál de los dos tipos aplica."
     - "Para changes de tipo TC: implementa exactamente un `TC-XXX` del artefacto `inputs/<endpoint>/casos-prueba.md`. Si el TC no existe allí, detente y solicita que se genere primero (con el skill de refinamiento de casos)."
     - "Para changes de tipo TC: en `Why` cita explícitamente los identificadores del requerimiento validado (por ejemplo `CA-08`, `F1.RN3`, `RN.GEN1`) tal como aparecen en el TC de origen."
     - "Para changes de tipo TC: en `What Changes` lista las variables `{{GLB-*}}` y `{{TC-XXX-*}}` que el test consumirá. Si alguna no existe en `variables.yaml` o `.env.example`, propón añadirla como parte del change."
-    - "Para changes de tipo matriz: hay exactamente un change por archivo CSV del endpoint. Si el endpoint tiene `matriz-raiz.csv` y `matriz-body.csv`, son dos changes hermanos. El `<nombre>` del change coincide con el sufijo del CSV (`raiz`, `body`, etc.)."
-    - "Para changes de tipo matriz: en `What Changes` lista **todas** las variables `MTZ-<endpoint>-<campo>-<abreviatura>` que se extraerán del CSV, con la indicación original del CSV entre paréntesis como comentario. Si el change introduce un generador nuevo en `src/framework/generators.py`, decláralo también aquí con su firma."
+    - "Para changes de tipo matriz: hay exactamente un change por archivo CSV del endpoint. Un endpoint con seis contextos, un objeto anidado y una matriz cruzada son ocho changes hermanos. El `<nombre>` del change coincide con el sufijo del CSV (`c2-noauth-text`, `buttons`, `cruzada`, etc.)."
+    - "Para changes de tipo matriz: antes de proponer, verifica que el CSV esté limpio. Si alguna celda trae el prefijo de ID de valor con la forma `<campo>.<id> | <valor>`, detente: el CSV no pasó la fase de limpieza del proyecto generador y debe devolverse."
+    - "Para changes de tipo matriz: en `What Changes` lista **todas** las variables `MTZ-<endpoint>-<campo>-<slug_indicacion>` que se extraerán del CSV, con la indicación original entre paréntesis como comentario. Lista aparte los valores de resolución sembrada, que van a `variables.yaml → globals:` como `GLB-*` con su bloque `seed:`. Si el change introduce un generador nuevo en `src/framework/generators.py`, decláralo también aquí con su firma."
+    - "Para changes de tipo matriz: en `What Changes` incluye el inventario de casos — una entrada por fila del CSV con su id derivado (`V<n>`/`I<n>`), el número original de la columna `Campo`, el código HTTP esperado y la `Prioridad`. La prioridad es metadato de implementación: ordena en qué secuencia se escriben y revisan los casos, y no se traduce a markers ni a filtros de ejecución."
+    - "Para changes de tipo matriz: en `What Changes` registra el hash SHA-256 del CSV implementado. Si existe un change archivado previo sobre el mismo CSV, compara ambos hashes y declara en `Why` si el CSV se regeneró."
     - "Para changes de tipo matriz: en `What Changes` lista las mirror keys leídas de la sección `## Mirror keys en respuesta` de `docs.md`. Si la sección no existe o todas sus filas dicen `No`, indica explícitamente `Mirror keys: ninguna` — no inventes keys."
+    - "Para changes de tipo matriz: verifica la disponibilidad de los módulos de la sección 'Arquitectura objetivo'. Si `matrix.py`, `generators.py` o `mirror.py` no existen, declara la dependencia faltante en `Why`, escribe el proposal completo y **detén el change ahí** sin generar código de test. No sortees la falta duplicando lógica de parseo dentro del archivo de test."
 
   tasks:
     - "Para changes de tipo TC: cada elemento del bloque `Assert:` del caso AAA se traduce a una tarea independiente. Si el caso tiene 3 asserts, hay al menos 3 tareas de aserción."
     - "Para changes de tipo TC: ninguna tarea contiene valores literales de negocio (IDs, tokens, URLs, cuerpos de respuesta). Todo se referencia como `{{...}}` y se resuelve vía el cargador de configuración."
     - "En el código generado (TC o matriz), usa `pytest_check.check(...)` para todas las aserciones excepto la primera (status code HTTP), que es `assert` duro."
-    - "Para changes de tipo matriz: primera tarea obligatoria es transponer el CSV. Cada columna del grupo `válidos` recibe id `V1..Vn`; cada columna del grupo `inválidos` recibe id `I1..In`. Los ids son posicionales y se preservan al reanotar. El test es único (`test_matriz_<nombre>`) con `pytest.mark.parametrize` — nunca un archivo por columna."
-    - "Para changes de tipo matriz: por cada celda con valor literal, crear una variable `MTZ-<endpoint>-<campo>-<abreviatura>` en `variables.yaml → matrix_values:` con el comentario que copia la indicación original del CSV entre paréntesis. Usa abreviaturas del catálogo fijo (`min`, `max`, `typ`, `outmin`, `outmax`, `type`, `null`, `empty`, `regex`, `len_min`, `len_max`, `len_outmin`, `len_outmax`, `wl`, `outwl`); si la indicación es novedosa, propón una abreviatura y añade comentario extendido justificando su elección."
-    - "Para changes de tipo matriz: por cada celda con indicación entre paréntesis, decide entre resolución estática (valor concreto en `variables.yaml`, preferida por defecto) o resolución en runtime (referencia a función de `src/framework/generators.py`, solo cuando la indicación implique variedad entre corridas). Documenta el criterio en el proposal."
+    - "Para changes de tipo matriz: primera tarea obligatoria es derivar los ids desde la columna `Código HTTP Esperado`, que cumple el rol de `Resultado`. Cada fila con `< 400` recibe id `V1..Vn`; cada fila con `>= 400` recibe id `I1..In`. Los ids son posicionales dentro de su grupo y se preservan al anotar el sidecar. El test es único (`test_matriz_<nombre>`) con `pytest.mark.parametrize` — nunca un archivo por fila."
+    - "Para changes de tipo matriz: incluye una tarea de construcción de la petición base del contexto, derivada de `docs.md`, con todos sus valores referenciados como `{{...}}`. Cada caso parametrizado es esa base más la desviación de su fila. La matriz usa exclusivamente las columnas de su propio CSV; para matrices de objeto anidado, la petición padre se declara en `variables.yaml → globals:`."
+    - "Para changes de tipo matriz: respeta la semántica de celdas al construir el payload. `(ausente)` significa que la key **no se emite**; `(vacío)` significa key presente con `\"\"`; los campos con `Tipo de Dato` igual a `String (arreglo JSON)` viajan serializados como string, no como arreglo nativo. La coerción según `Tipo de Dato` debe poder no aplicarse en los casos cuyo valor es de tipo incorrecto a propósito."
+    - "Para changes de tipo matriz: por cada celda que se materialice, crear una variable `MTZ-<endpoint>-<campo>-<slug_indicacion>` en `variables.yaml → matrix_values:` con el comentario que copia la indicación original del CSV entre paréntesis. El slug se deriva del texto de la celda; el catálogo de abreviaturas (`min`, `max`, `typ`, `outmin`, `outmax`, `type`, `null`, `omit`, `empty`, `regex`, `len_min`, `len_max`, `len_outmin`, `len_outmax`, `wl`, `outwl`) es preferente, no obligatorio, y se usa solo cuando la indicación encaje limpiamente. Los campos anidados se transliteran: `buttons[].type` a `buttons_type`."
+    - "Para changes de tipo matriz: por cada celda con indicación entre paréntesis, decide entre las tres rutas de resolución — estática (preferida por defecto), runtime (solo si la indicación cae en uno de los cuatro disparadores semánticos: unicidad, aleatoriedad, variedad o volumen) y sembrada (cuando el valor depende de datos preexistentes en el ambiente). Documenta el criterio en el proposal. Si aparece un caso de runtime que no encaja en los cuatro disparadores, amplía esa tabla en `openspec/config.yaml` como parte del change en lugar de resolverlo ad hoc."
+    - "Para changes de tipo matriz: por cada valor de resolución sembrada, añade la variable `GLB-*` a `variables.yaml → globals:` con su bloque `seed:` describiendo qué debe existir en el ambiente, valor inicial `[REQUIERE RESPUESTA: ...]`, más una tarea explícita de siembra a cargo del QA."
     - "Para changes de tipo matriz: si añades un generador nuevo a `src/framework/generators.py`, incluye tarea obligatoria de regenerar el catálogo con `python -m framework.generators --catalog > docs/generators-catalog.md`. Nunca editar `docs/generators-catalog.md` a mano."
-    - "Para changes de tipo matriz: si `docs.md` declara mirror keys, incluye tarea de invocar `mirror.assert_mirrored(request, response.json(), mirror_keys)` **solo en los casos de éxito** (`V1..Vn`). Los casos de error (`I1..In`) no ejecutan este assert."
+    - "Para changes de tipo matriz: si `docs.md` declara mirror keys, incluye tarea de ejecutar el assert de espejo **solo en los casos de éxito** (`V1..Vn`, es decir `status < 400`, incluido el `206`). Los casos de error (`I1..In`) no lo ejecutan. La firma concreta la define el change que implemente `src/framework/mirror.py`."
+    - "Para changes de tipo matriz: si una corrida revela que el endpoint se comporta distinto a lo que declara la matriz o el `docs.md`, incluye tarea de marcar ese caso con `pytest.mark.xfail(strict=True, reason=...)` citando el id y la discrepancia, y de registrarlo en `inputs/<endpoint-slug>/hallazgos.md`. Nunca ajustes el valor esperado del test para que pase."
+    - "Para changes de tipo matriz: la anotación de resultados produce el sidecar `reports/anotado-<nombre>.csv` y **nunca** modifica el CSV de `inputs/`. Preserva el BOM al escribirlo. Las filas que no llegaron a ejecutarse por el `-x` quedan con `ultimo_resultado` vacío, distinguible de `SKIPPED`."
     - "Incluye siempre una tarea final marcada como bloqueante: para TC, `Ejecutar pytest --stepwise -k <TC-ID>`; para matriz, `Ejecutar pytest --stepwise -x -k matriz-<nombre>`. Entregar salida al QA para retroalimentación. El change no se archiva sin retroalimentación humana positiva."
 
   specs:
     - "Las specs describen contratos observables del endpoint (comportamientos), no casos individuales. Un endpoint = una spec. Los TC y los casos de matriz quedan trazados como changes archivados, no como líneas de spec."
-    - "Cada requirement de la spec debe tener al menos un scenario con formato `WHEN ... THEN ...` derivado de un CA, RN o columna de matriz del requerimiento original."
+    - "Cada requirement de la spec debe tener al menos un scenario con formato `WHEN ... THEN ...` derivado de un CA, RN o fila de matriz del requerimiento original."
 
   design:
     - "Solo crea `design.md` cuando el change introduzca un helper reutilizable del framework (fixture nueva, matcher, generador nuevo en el catálogo), un cambio en el cargador de configuración, o una decisión que afecte a otros endpoints. Los TC y matrices estándar no requieren design."

@@ -7,12 +7,18 @@ equipo de QA, construido con [OpenSpec](https://github.com/Fission-AI/OpenSpec)
 Cada endpoint se cubre con dos tipos de change proposal independientes:
 
 - **Un change por cada `TC-XXX`** del `casos-prueba.md` (formato AAA).
-- **Un change por cada matriz CSV** (`raiz` + un CSV por objeto anidado)
-  que implementa **todas** las columnas del CSV en un solo test
-  parametrizado.
+- **Un change por cada matriz CSV** (uno por contexto de aplicación, uno por
+  objeto anidado, uno de validación cruzada) que implementa **todas** las
+  filas del CSV en un solo test parametrizado.
 
 La disciplina completa vive en `openspec/config.yaml`. Este README
 describe cómo **operar** el repo día a día.
+
+> **Estado actual — la ruta de matriz no es ejecutable todavía.** Faltan
+> `src/framework/matrix.py`, `generators.py` y `mirror.py`, y
+> `reannotate.py` necesita reescritura. Un change de matriz se puede
+> proponer, pero se detiene antes de generar código. Ver
+> [Arquitectura pendiente](#arquitectura-pendiente).
 
 ---
 
@@ -46,10 +52,13 @@ npm install -g @fission-ai/openspec@latest
 │   ├── specs/                 # Specs por endpoint (crecen con /opsx:archive)
 │   └── changes/               # Changes activos + carpeta archive/
 ├── inputs/
-│   └── <endpoint>/            # Artefactos de entrada por endpoint
-│       ├── docs.md            # Contrato + sección "Mirror keys en respuesta"
-│       ├── matriz-raiz.csv    # Partición de equivalencias (columna = caso)
-│       └── casos-prueba.md    # Casos AAA con IDs TC-XXX
+│   └── <endpoint-slug>/       # Artefactos de entrada por endpoint
+│       ├── docs.md            # Contrato + "Mirror keys en respuesta" + mapeo de slug
+│       ├── matriz-<ctx>.csv   # Uno por contexto (fila = caso, columna = campo)
+│       ├── matriz-<objeto>.csv# Uno por objeto anidado
+│       ├── matriz-cruzada.csv # Validación cruzada
+│       ├── casos-prueba.md    # Casos AAA con IDs TC-XXX
+│       └── hallazgos.md       # Discrepancias reales endpoint vs matriz
 ├── src/framework/             # Framework de tests (creado por el 1er change)
 ├── tests/                     # Tests por endpoint (creados por change)
 ├── docs/
@@ -134,7 +143,245 @@ de matriz.
 
 ### 5. Verifica la instalación
 
-Con el entorno virtual activo y `.env` completo:
+El repositorio arranca **sin código Python**. El framework se construye
+como el primer change de OpenSpec para que quede trazado y versionado.
+
+Abre Claude Code en la raíz del repo y en el chat escribe:
+
+```
+/opsx:propose add-test-framework-base
+```
+
+Y a continuación pega este prompt exactamente:
+
+> **Nota histórica.** Este prompt se ejecutó ya y su change está archivado,
+> pero **quedó incompleto**: los módulos `matrix.py`, `generators.py` y
+> `mirror.py` nunca se crearon, y `reannotate.py` se implementó contra otro
+> contrato. Las especificaciones 8, 9, 10 y 11 de este prompt están
+> **superadas** por [Arquitectura pendiente](#arquitectura-pendiente), que
+> refleja el contrato vigente del CSV. Se conserva aquí como registro de lo
+> que se pidió, no como instrucción a re-ejecutar.
+
+<details>
+<summary><b>📋 Prompt de bootstrap (clic para expandir)</b></summary>
+
+````
+Necesito el bootstrap del framework de automatización de pruebas de APIs
+para este repositorio. Este es el PRIMER change proposal y su objetivo es
+crear el esqueleto sobre el cual todos los TC y matrices posteriores se
+implementarán. Basa todas las decisiones en `openspec/config.yaml`.
+
+# Alcance
+
+Crear:
+
+1. `pyproject.toml` con Python >= 3.11 y las siguientes dependencias
+   pinneadas exactas (no usar rangos ni `^`, `~`):
+
+   Runtime:
+   - pytest == 9.1.1
+   - pytest-html == 4.2.0
+   - pytest-check == 2.9.1
+   - pytest-json-report == 1.5.0
+   - httpx == 0.28.1
+   - sqlalchemy == 2.0.51
+   - pymysql[rsa] == 1.2.0
+   - pydantic == 2.13.4
+   - pydantic-settings == 2.14.2
+   - PyYAML (última estable menor)
+
+   Dev:
+   - ruff == 0.16.1
+
+2. Sección `[tool.pytest.ini_options]` en pyproject.toml con:
+   - addopts = "--strict-markers -ra --tb=short"
+   - testpaths = ["tests"]
+   - Marcadores registrados: tc(id), prioridad(nivel), criticidad(nivel),
+     tipo(clase), tecnica(nombre), rol(nombre), impacto(nivel), matriz(nombre).
+
+3. Estructura de carpetas y archivos:
+   src/framework/__init__.py
+   src/framework/config.py     # pydantic-settings + loader YAML
+   src/framework/http.py       # cliente httpx + cURL generator
+   src/framework/db.py         # engine SQLAlchemy Core con AUTOCOMMIT
+   src/framework/variables.py  # interpolación {{...}} con soporte MTZ-*
+   src/framework/matrix.py     # parser CSV `;`, transposición, IDs V/I
+   src/framework/generators.py # catálogo de generadores + CLI --catalog
+   src/framework/mirror.py     # assert de espejo por key JSON exacta
+   src/framework/reannotate.py # script CLI para reanotar la matriz CSV
+   tests/__init__.py
+   tests/conftest.py           # fixtures compartidos
+   docs/                       # carpeta para docs/generators-catalog.md
+
+4. `src/framework/config.py`:
+   - Clase `Settings(BaseSettings)` con
+     `model_config = SettingsConfigDict(env_file=".env", extra="ignore")`.
+   - Campos requeridos: GLB_URL_BASE (str), GLB_TOKEN_ADMIN (str),
+     DB_HOST (str), DB_PORT (int), DB_NAME (str), DB_USER (str),
+     DB_PASSWORD (str).
+   - Función `load_variables() -> dict` que lee `variables.yaml` desde
+     la raíz del proyecto y retorna el dict con secciones `globals`,
+     `test_cases` y `matrix_values`.
+
+5. `src/framework/variables.py`:
+   - Función `resolve(payload, tc_id=None) -> dict | str | list | int` que
+     acepta un payload (dict/str/list anidados) y sustituye placeholders
+     `{{nombre-var}}`. Orden de resolución según prefijo:
+       1. `GLB-*` → primero en `Settings` (guion → underscore, upper); si
+          no está, en `variables.yaml → globals`.
+       2. `TC-XXX-*` → solo se resuelve si el prefijo `TC-XXX` coincide
+          con el `tc_id` pasado; en caso contrario `KeyError` con mensaje
+          claro. Fuente: `variables.yaml → test_cases[TC-XXX].variables`.
+       3. `MTZ-*` → busca en `variables.yaml → matrix_values`. Si el
+          valor es un dict con keys `generator` y `params`, resuelve
+          invocando `getattr(framework.generators, generator)(**params)`
+          y retorna el valor generado. Si es literal, lo retorna.
+   - Detecta placeholders con regex `\{\{([A-Za-z0-9_-]+)\}\}`.
+   - Preserva el tipo cuando el placeholder ocupa el string completo
+     (ej: `"{{GLB-account_id_valido}}"` → int, no str).
+   - Lanza `KeyError` con mensaje claro si una variable no existe. Nunca
+     retorna el placeholder sin resolver.
+
+6. `src/framework/http.py`:
+   - Función `client(settings) -> httpx.Client` que devuelve un cliente
+     síncrono con `base_url=settings.GLB_URL_BASE` y timeout 30s.
+   - Función `to_curl(request: httpx.Request) -> str` que construye el
+     comando cURL equivalente con headers y body, para logging en fallos.
+
+7. `src/framework/db.py`:
+   - Función `engine(settings) -> sqlalchemy.Engine` que construye un
+     engine MySQL usando `pymysql`, con `isolation_level="AUTOCOMMIT"`.
+
+8. `src/framework/matrix.py`:
+   - Función `load_matrix(path: Path) -> MatrixData` que:
+     - Lee un CSV con separador `;`.
+     - Valida que existen las filas literales `Resultado` y
+       `Código HTTP esperado` (case-sensitive).
+     - Detecta las columnas y las clasifica según `Resultado`:
+       Éxito → grupo válidos (ids V1..Vn en orden posicional),
+       Error  → grupo inválidos (ids I1..In en orden posicional).
+   - `MatrixData` es un dataclass/pydantic model que expone
+     `cases: list[MatrixCase]` con orden [V1, V2, ..., Vn, I1, I2, ..., In].
+   - Cada `MatrixCase` tiene: `id: str` (V1/I3/etc), `fields: dict[str, Any]`
+     (por-campo el valor de la celda: literal directo o
+     `{ generator, params }`), `expected_status: int`,
+     `expected_result: Literal["Éxito", "Error"]`.
+   - Método `MatrixData.parametrize_args()` que retorna
+     `(argnames, argvalues, ids)` para usar directamente en
+     `pytest.mark.parametrize`.
+
+9. `src/framework/generators.py`:
+   - Set inicial de funciones (todas con docstring de una línea que
+     empieza con la abreviatura entre corchetes, para el catálogo):
+     - `int_min(min_val: int) -> int` — `[min] Retorna el valor mínimo permitido.`
+     - `int_max(max_val: int) -> int` — `[max] Retorna el valor máximo permitido.`
+     - `int_below_min(min_val: int) -> int` — `[outmin] Retorna min_val - 1.`
+     - `int_above_max(max_val: int) -> int` — `[outmax] Retorna max_val + 1.`
+     - `wrong_type_string(sample: str = "abc") -> str` — `[type] Retorna un string donde se esperaba entero.`
+     - `wrong_type_none() -> None` — `[null] Retorna None.`
+     - `empty_string() -> str` — `[empty] Retorna cadena vacía.`
+     - `regex_violating(regex: str, sample: str = "!!!") -> str` —
+       `[regex] Retorna un string que viola el regex dado.`
+     - `random_string(length: int) -> str` — `[len_min|len_max|len_outmax] String aleatorio de longitud exacta.`
+     - `len_below_min(min_len: int) -> str` — `[len_outmin] String de longitud min_len - 1.`
+     - `len_above_max(max_len: int) -> str` — `[len_outmax] String de longitud max_len + 1.`
+   - CLI: `python -m framework.generators --catalog` imprime a stdout un
+     Markdown con tabla `| Función | Abreviatura | Firma | Descripción |`
+     construida por introspección de las funciones del módulo (inspecciona
+     nombre, signature, y primer línea del docstring). Redirigir a
+     `docs/generators-catalog.md` para persistir.
+   - El catálogo NUNCA se edita a mano — su fuente de verdad son los
+     docstrings.
+
+10. `src/framework/mirror.py`:
+    - Función `assert_mirrored(request_payload: dict, response_json: dict, keys: list[str]) -> None`.
+    - Para cada `key` en `keys`:
+      - Si `key not in request_payload`: raise `KeyError` (bug del test).
+      - Si `key not in response_json`: skip silencioso (la doc declaró
+        la key pero la respuesta no la contiene como key JSON).
+      - Si ambas presentes: `pytest_check.check(
+        request_payload[key] == response_json[key],
+        f"mirror {key}: request={request_payload[key]} response={response_json[key]}")`.
+    - No hace match por substring bajo ninguna circunstancia.
+
+11. `src/framework/reannotate.py` como script CLI:
+    - Uso: `python -m framework.reannotate --matrix <ruta> --results <ruta>`.
+    - Lee `resultados.json` (pytest-json-report) y añade/actualiza en el
+      CSV las columnas o filas de trazabilidad. Mapeo:
+      - Nodeids que contengan `TC-XXX` → columna del CSV con ese TC en la
+        fila de trazabilidad (si aplica).
+      - Nodeids parametrizados de forma `test_matriz_<nombre>[V<n>]` y
+        `[I<n>]` → n-ésima columna del grupo válidos o inválidos del CSV
+        correspondiente (por posición).
+    - Actualiza `ultimo_resultado` (PASSED/FAILED/SKIPPED) y
+      `ultima_ejecucion` (ISO 8601) en cada columna probada.
+
+12. `tests/conftest.py` con fixtures:
+    - `settings` (scope=session)
+    - `http_client` (scope=session, yield con `.close()` al final)
+    - `db_conn` (scope=function, con `.close()` al final)
+    - `resolve_payload` (scope=function) → factory que dado un `tc_id`
+      retorna un callable equivalente a
+      `functools.partial(resolve, tc_id=tc_id)`.
+    - Hook `pytest_runtest_makereport` que en caso de fallo adjunta al
+      reporte HTML el cURL de la última request (leído de un atributo
+      del cliente) y detalles de las aserciones de pytest-check que
+      fallaron.
+
+13. Sección `[tool.ruff]` en pyproject.toml con:
+    - line-length = 100
+    - target-version = "py311"
+    - lint.select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+14. Un smoke test opcional `tests/test_smoke.py` que:
+    - Verifica que `Settings()` carga sin excepción (leyendo `.env`).
+    - Verifica que `load_variables()` retorna un dict con las tres
+      secciones `globals`, `test_cases` y `matrix_values`.
+    - Verifica que `matrix.load_matrix` no rompe con un CSV mínimo
+      inline (fixtura con StringIO).
+    - Verifica que `generators.int_above_max(10) == 11`.
+    - NO hace request HTTP ni consulta a BD.
+    - Marcado con `@pytest.mark.tc("SMOKE-001")`.
+
+15. Al finalizar la implementación, ejecutar como parte del change:
+    `python -m framework.generators --catalog > docs/generators-catalog.md`
+    y committear el archivo generado.
+
+# Fuera de alcance
+
+- No implementar ningún test contra endpoints reales. Los TC y matrices
+  específicos vendrán en changes posteriores (uno por TC, uno por CSV).
+- No hacer llamadas reales a APIs desde este change.
+- No modificar `variables.yaml`, `.env.example` ni `openspec/config.yaml`.
+
+# Aceptación
+
+- `pip install -e ".[dev]"` corre sin errores.
+- `pytest --collect-only` reporta al menos el smoke test.
+- `pytest tests/test_smoke.py -v` pasa (asumiendo `.env` completo).
+- `ruff check .` pasa limpio.
+- `python -c "from framework.config import Settings, load_variables;
+   from framework.variables import resolve;
+   from framework.matrix import load_matrix;
+   from framework.generators import int_above_max;
+   from framework.mirror import assert_mirrored; print('ok')"` imprime `ok`.
+- `python -m framework.generators --catalog | head -5` imprime la tabla
+  inicial del catálogo.
+- `docs/generators-catalog.md` existe y contiene una tabla con al menos
+  las 11 funciones del set inicial.
+````
+
+</details>
+
+Cuando Claude termine el proposal, revísalo
+(`openspec/changes/add-test-framework-base/`), ajusta lo que haga falta y
+lanza:
+
+```
+/opsx:apply
+```
+
+Al terminar, ejecuta manualmente:
 
 ```bash
 pytest --collect-only
@@ -218,27 +465,165 @@ la próxima vez.
 
 ---
 
-## Añadir un endpoint nuevo
+## Arquitectura pendiente
 
-1. Crea `inputs/<endpoint-slug>/` (ej: `inputs/templates-delete/`).
-2. Coloca ahí los tres artefactos generados por los skills de
-   refinamiento del equipo:
-   - `docs.md` (incluyendo la sección `## Mirror keys en respuesta`,
-     ver siguiente sección).
-   - `matriz-raiz.csv` (+ CSVs anidados si aplica).
-   - `casos-prueba.md`.
-3. Añade al `variables.yaml`, bajo `test_cases:`, un bloque por cada
-   `TC-XXX` del `casos-prueba.md`, con `description`, `seed` y
-   `variables` (placeholders `[REQUIERE RESPUESTA: ...]`).
-4. Siembra los datos descritos en `seed` en el ambiente de pruebas y
-   reemplaza los placeholders por los valores reales.
+La ruta de TC individual funciona. **La ruta de matriz no.** Estado real de
+`src/framework/`:
 
-La sección `matrix_values:` se poblará automáticamente cuando corras el
-primer change de matriz para ese endpoint.
+| Módulo           | Rol                                          | Estado           |
+|------------------|----------------------------------------------|------------------|
+| `config.py`      | pydantic-settings + loader YAML              | Existe           |
+| `variables.py`   | Interpolación `{{...}}`                      | Existe           |
+| `http.py`        | Cliente httpx + generador de cURL            | Existe           |
+| `db.py`          | Engine SQLAlchemy con AUTOCOMMIT             | Existe           |
+| `matrix.py`      | Parser del CSV, derivación de ids, metadatos | **No existe**    |
+| `generators.py`  | Generadores + CLI `--catalog`                | **No existe**    |
+| `mirror.py`      | Assert de espejo por key JSON exacta         | **No existe**    |
+| `reannotate.py`  | Sidecar de resultados                        | Existe, no sirve |
+
+`reannotate.py` no implementa el contrato vigente: usa el delimitador por
+defecto en vez de `;`, abre con `utf-8` en vez de `utf-8-sig` (los CSV traen
+BOM), espera una columna `TC`/`id` en vez de `Campo`, y no maneja nodeids
+parametrizados `[V<n>]`/`[I<n>]`. Requiere reescritura, no parche.
+
+**Consecuencia operativa**: un change de tipo matriz se puede proponer, pero
+Claude lo detiene tras el proposal declarando la dependencia faltante. No
+generará un test que no puede correr.
+
+### Contrato que deben cumplir los módulos faltantes
+
+Resumen; la especificación normativa está en `openspec/config.yaml`.
+
+**`matrix.py`** — lee el CSV con `encoding="utf-8-sig"` y `delimiter=";"`.
+Valida que la columna 1 sea `Campo`, la penúltima `Código HTTP Esperado` y
+la última `Prioridad`. Consume las tres filas de metadatos (`¿Requerido?`,
+`Tipo Validación`, `Tipo de Dato`) y las expone por campo. Deriva los ids:
+`Código HTTP Esperado < 400` → `V1..Vn` (incluye `206`), `>= 400` →
+`I1..In`, posicionales dentro de su grupo. Extrae el sufijo
+`N (cruzada: campoA+campoB)` de las filas cruzadas. Expone un sentinela para
+campo ausente, distinto de `None`. Entrega `(argnames, argvalues, ids)` para
+`pytest.mark.parametrize`.
+
+**`generators.py`** — al set inicial de 11 hay que añadir los que las
+matrices reales exigen: string único no usado antes, texto con N variables
+`{{n}}` en secuencia, texto con hueco / desorden / repetición en la
+secuencia, arreglo JSON con N elementos, URL válida de longitud N, teléfono
+de N dígitos y texto con N espacios consecutivos. El catálogo se regenera
+con `python -m framework.generators --catalog`; nunca a mano.
+
+**`mirror.py`** — assert de espejo por key JSON exacta, nunca por substring,
+solo en casos con `status < 400`, cada key con `pytest_check.check`.
+
+**`reannotate.py`** — produce el sidecar `reports/anotado-<nombre>.csv`,
+preservando el BOM. **Nunca modifica el CSV de `inputs/`.** Mapea nodeids
+`[V<n>]`/`[I<n>]` a la fila correspondiente por posición dentro de su grupo.
+Las filas que el `-x` impidió ejecutar quedan con `ultimo_resultado` vacío,
+distinguible de `SKIPPED`.
+
+La API concreta de estos módulos **no está fijada** por el contrato: se
+diseña en el change que los implemente.
 
 ---
 
-## Convención en `docs.md`: sección "Mirror keys en respuesta"
+## Añadir un endpoint nuevo
+
+### De dónde vienen las matrices
+
+Los CSV **no se escriben aquí**. Los produce un proyecto aparte: un agente de
+Claude Code que deriva particiones de equivalencia y valores límite a partir
+de la documentación del endpoint. Ese proyecto entrega, por endpoint:
+
+- Un `<endpoint>-refinamiento.md` — la memoria del proceso: contextos,
+  valores por campo, criticidad, preguntas abiertas, registro de cambios.
+- Varios `<endpoint>-matriz-*.csv` — uno por contexto de aplicación, uno por
+  objeto anidado, uno de validación cruzada.
+
+Dos condiciones antes de traerlos:
+
+1. **El CSV tiene que estar limpio.** El generador emite las celdas como
+   `<campo>.<id> | <valor>` y su script `limpiar-matriz.sh` quita el prefijo.
+   Si ves ese prefijo en una celda, el archivo no está listo — devuélvelo.
+2. **El refinamiento tiene que estar en `estado: aprobado`.** Si no lo está,
+   los CSV en disco pueden reflejar valores viejos.
+
+Hay un ejemplo real de los 8 CSV de un endpoint en [docs/examples/](docs/examples/),
+junto con el README del proyecto que los generó.
+
+### Pasos
+
+1. Crea `inputs/<endpoint-slug>/`. El slug es **corto** (ej:
+   `inputs/templates-create/`), no el nombre largo del archivo de origen.
+2. Copia ahí los CSV, renombrándolos a `matriz-<nombre>.csv` donde
+   `<nombre>` es el sufijo del contexto, el objeto anidado o `cruzada`:
+
+   ```
+   integrations-gupshup_integrations-templates-create-matriz-c2-noauth-text.csv
+     → inputs/templates-create/matriz-c2-noauth-text.csv
+   ```
+
+3. Escribe a mano el `docs.md`, que debe incluir:
+   - La sección `## Mirror keys en respuesta` (ver siguiente sección).
+   - El **mapeo del slug**: nombre corto usado aquí ↔ nombre largo del
+     proyecto generador.
+   - La **ruta al `-refinamiento.md`** de origen. Ese archivo **no se
+     versiona aquí**, así que `docs.md` queda como único portador en-repo de
+     las reglas de validación del endpoint.
+4. Coloca el `casos-prueba.md` si el endpoint también tiene TC del flujo AAA.
+5. Añade al `variables.yaml`, bajo `test_cases:`, un bloque por cada
+   `TC-XXX`, con `description`, `seed` y `variables` (placeholders
+   `[REQUIERE RESPUESTA: ...]`).
+6. Siembra los datos descritos en `seed` en el ambiente de pruebas y
+   reemplaza los placeholders por los valores reales.
+
+La sección `matrix_values:` se poblará cuando corras el primer change de
+matriz para ese endpoint.
+
+### Cuando el generador emite una versión nueva del CSV
+
+Cada change de matriz archiva el hash SHA-256 del CSV que implementó. Antes
+de proponer sobre el mismo CSV, compara:
+
+```bash
+sha256sum inputs/<endpoint-slug>/matriz-<nombre>.csv
+```
+
+Si difiere del registrado en el change archivado, el CSV se regeneró. Como la
+identidad de los casos es **posicional**, los ids `V<n>`/`I<n>` pueden
+haberse corrido: las anotaciones anteriores dejan de ser válidas y hay que
+volver a ejecutar la matriz completa.
+
+---
+
+## Convenciones del `docs.md`
+
+`docs.md` es obligatorio y lo escribes tú a mano. El agente que genera las
+matrices **no lo produce**, y su `-refinamiento.md` no se versiona aquí, así
+que este archivo es el único portador en-repo de las reglas de validación
+del endpoint. Tres cosas que debe incluir además del contrato:
+
+### 1. Mapeo del slug
+
+```markdown
+## Mapeo de nombres
+
+| Uso                          | Nombre                                                   |
+|------------------------------|----------------------------------------------------------|
+| Slug en este repo            | `templates-create`                                        |
+| Nombre en proyecto generador | `integrations-gupshup_integrations-templates-create`      |
+| Refinamiento de origen       | `../qa-ep-bva/docs/matrices/...-refinamiento.md` (v4)     |
+```
+
+El slug corto es el que se usa en `inputs/<slug>/` y en los nombres
+`MTZ-<slug>-<campo>-<indicacion>`. Sin él, las variables pasan de 90
+caracteres.
+
+### 2. Estructura de la petición base
+
+De aquí sale la petición base que cada matriz usa como punto de partida:
+campos, tipos, cuáles son condicionales y bajo qué condición. Las matrices
+solo declaran **desviaciones** respecto a esta base.
+
+### 3. Sección "Mirror keys en respuesta"
 
 Para que el assert de espejo entrada → respuesta funcione, cada `docs.md`
 de endpoint incluye una sección obligatoria que declara qué keys del
@@ -263,6 +648,9 @@ Reglas:
   de espejo se omite silenciosamente para ese endpoint.
 - El nombre de la sección es exacto: `## Mirror keys en respuesta`. El
   parser del framework busca por este encabezado.
+- El assert corre **solo en casos de éxito**, definidos como
+  `Código HTTP Esperado < 400`. Eso incluye el `206` de éxito parcial: la
+  respuesta parcial sí devuelve el recurso creado.
 
 ---
 
@@ -335,44 +723,60 @@ git commit -m "test(<endpoint>): implementa TC-XXX"
 Todos los casos de una matriz CSV se implementan en un solo change
 proposal como un único test parametrizado. En el chat de Claude Code:
 
+> **Hoy este flujo se detiene en el paso 2.** Faltan `matrix.py`,
+> `generators.py` y `mirror.py` — ver [Arquitectura pendiente](#arquitectura-pendiente).
+> El proposal se genera y sirve como inventario revisable, pero
+> `/opsx:apply` no producirá código de test hasta que esos módulos existan.
+
 ### 1. Propose
 
 ```
 /opsx:propose add-test-<endpoint-slug>-matriz-<nombre>
 ```
 
-Ejemplos:
+Un change por CSV. Para un endpoint con seis contextos, un objeto anidado y
+una matriz cruzada, son ocho:
 
-- `/opsx:propose add-test-templates-delete-matriz-raiz`
-- Si hay anidados: adicionalmente
-  `/opsx:propose add-test-templates-create-matriz-body`
+```
+/opsx:propose add-test-templates-create-matriz-c1-noauth-sin-type
+/opsx:propose add-test-templates-create-matriz-c2-noauth-text
+...
+/opsx:propose add-test-templates-create-matriz-buttons
+/opsx:propose add-test-templates-create-matriz-cruzada
+```
 
 Claude:
 
-1. Lee `inputs/<endpoint>/matriz-<nombre>.csv` (separador `;`) y lo
-   transpone (columna → caso).
-2. Por cada celda:
-   - Si es literal → propone variable `MTZ-<endpoint>-<campo>-<abrev>`
-     en `variables.yaml → matrix_values:` con la indicación original
-     entre paréntesis como comentario.
-   - Si es indicación entre paréntesis → escoge resolución estática
-     (default) o generador runtime. Si añade un generador nuevo, lo
-     registra en `src/framework/generators.py` con docstring y regenera
-     `docs/generators-catalog.md`.
-3. Lee `inputs/<endpoint>/docs.md § Mirror keys en respuesta` y lista
-   las keys aplicables en el proposal.
-4. Genera proposal + tasks (transponer, resolver variables, invocar
-   mirror en casos de éxito, ejecutar con `-x`).
+1. Lee `inputs/<endpoint>/matriz-<nombre>.csv` (`;`, UTF-8 con BOM) y
+   verifica que esté limpio. Deriva los ids desde `Código HTTP Esperado`:
+   `< 400` → `V1..Vn` (incluye `206`), `>= 400` → `I1..In`, posicionales
+   dentro de su grupo.
+2. Construye la petición base del contexto a partir de `docs.md`. Cada caso
+   es esa base más la desviación de su fila.
+3. Por cada celda elige una de las tres rutas de resolución — estática
+   (default), runtime (solo por disparador semántico) o sembrada (cuando el
+   valor depende del ambiente) — y registra la variable correspondiente:
+   `MTZ-*` en `matrix_values:` para las dos primeras, `GLB-*` con bloque
+   `seed:` en `globals:` para la tercera.
+4. Lee `inputs/<endpoint>/docs.md § Mirror keys en respuesta` y lista las
+   keys aplicables.
+5. Genera proposal + tasks, incluyendo el inventario de casos con su
+   prioridad y el hash SHA-256 del CSV.
 
 ### 2. Revisa
 
 Abre `openspec/changes/add-test-.../proposal.md`. Verifica:
 
-- Que las variables `MTZ-*` propuestas cubran todas las celdas del CSV.
-- Que las abreviaturas correspondan al catálogo fijo (`min`, `outmax`,
-  etc.) o tengan comentario justificando una novedosa.
+- Que el inventario de casos cubra **todas** las filas del CSV, con los ids
+  `V<n>`/`I<n>` bien derivados del código HTTP.
+- Que las variables propuestas cubran todas las celdas, y que las de
+  resolución sembrada estén en `globals:` con su `seed:`, no en
+  `matrix_values:`.
+- Que el slug usado sea el corto y que los campos anidados estén
+  transliterados (`buttons[].type` → `buttons_type`).
 - Que las mirror keys correspondan a `docs.md`.
 - Que ningún generador nuevo se añada sin tarea de regenerar el catálogo.
+- Que el hash del CSV esté registrado.
 
 Ajusta los archivos si algo hace falta antes de aplicar.
 
@@ -386,14 +790,14 @@ Claude genera:
 
 - `tests/<endpoint>/test_matriz_<nombre>.py` — único test parametrizado
   con ids `V1..Vn` e `I1..In`.
-- Entradas nuevas en `variables.yaml → matrix_values:` con placeholders
-  `[REQUIERE RESPUESTA: ...]` donde el valor concreto lo deba llenar
-  el QA.
+- Entradas nuevas en `variables.yaml → matrix_values:` y, si aplica, en
+  `globals:` con sus bloques `seed:`, con placeholders
+  `[REQUIERE RESPUESTA: ...]` donde el valor concreto lo deba llenar el QA.
 - Si aplica, generador nuevo en `src/framework/generators.py` +
   `docs/generators-catalog.md` regenerado.
 
-**Antes de ejecutar**, revisa `variables.yaml → matrix_values:` y llena
-cada `[REQUIERE RESPUESTA: ...]` que haya quedado.
+**Antes de ejecutar**: llena cada `[REQUIERE RESPUESTA: ...]` que haya
+quedado, y siembra en el ambiente lo que describan los bloques `seed:`.
 
 ### 4. Ejecuta manualmente
 
@@ -410,13 +814,14 @@ pytest --stepwise -x -k "matriz-<nombre>" -v \
 
 Tres escenarios:
 
-- **Todas las columnas pasan**: `matriz-<nombre>: N/N columnas verdes`.
+- **Todas las filas pasan**: `matriz-<nombre>: N/N filas verdes`.
   Procede a `/opsx:archive`.
-- **Corta en la columna N**: pega el traceback del caso `[V<n>]` o
-  `[I<n>]` específico. Claude analiza si es bug del test, dato faltante
-  en `variables.yaml`, o discrepancia real del endpoint. Si es
-  discrepancia real, se documenta como hallazgo — **no se "arregla" el
-  test para pasar**.
+- **Corta en la fila N**: pega el traceback del caso `[V<n>]` o `[I<n>]`
+  específico. Claude analiza si es bug del test, dato faltante en
+  `variables.yaml`, o discrepancia real del endpoint. Si es discrepancia
+  real, se marca `xfail(strict=True)` y se registra en
+  `inputs/<endpoint-slug>/hallazgos.md` — **no se "arregla" el test para
+  pasar**.
 - **Bloqueo del ambiente**: descripción del problema. Claude no toca
   el test.
 
@@ -430,13 +835,14 @@ Si Claude corrige, repite paso 4.
 
 ```bash
 git add openspec/changes/archive/add-test-... tests/... variables.yaml \
-        src/framework/generators.py docs/generators-catalog.md
+        src/framework/generators.py docs/generators-catalog.md \
+        inputs/<endpoint-slug>/hallazgos.md
 git commit -m "test(<endpoint>): implementa matriz-<nombre>"
 ```
 
 ---
 
-## Reanotar la matriz CSV con resultados
+## Anotar los resultados de la matriz
 
 Tras cada corrida:
 
@@ -446,17 +852,30 @@ python -m framework.reannotate \
     --results reports/resultados.json
 ```
 
-El script mapea:
+Escribe un **sidecar** en `reports/anotado-<nombre>.csv`. El CSV de
+`inputs/` **nunca se modifica**: es un artefacto generado por otro proyecto,
+y escribirle encima lo desincroniza de su fuente, además de que una
+regeneración pisaría las anotaciones.
 
-- Nodeids con `TC-XXX` → columna del CSV con ese TC (si la matriz tiene
-  fila de trazabilidad a TC).
-- Nodeids parametrizados `test_matriz_<nombre>[V<n>]` → n-ésima columna
-  de válidos del CSV correspondiente.
-- Nodeids parametrizados `test_matriz_<nombre>[I<n>]` → n-ésima columna
-  de inválidos.
+El sidecar es el CSV de entrada con dos columnas añadidas al final,
+`ultimo_resultado` y `ultima_ejecucion` (ISO 8601), preservando el BOM. El
+mapeo:
 
-Añade/actualiza `ultimo_resultado` y `ultima_ejecucion` por columna.
-Commit por separado, no mezclar con implementación.
+- Nodeids con `TC-XXX` → la fila del CSV con ese TC (si la matriz tiene
+  columna de trazabilidad a TC).
+- Nodeids parametrizados `test_matriz_<nombre>[V<n>]` → n-ésima fila con
+  `Código HTTP Esperado < 400`.
+- Nodeids parametrizados `test_matriz_<nombre>[I<n>]` → n-ésima fila con
+  `Código HTTP Esperado >= 400`.
+
+Como `-x` corta al primer fallo, las filas que no se ejecutaron quedan con
+`ultimo_resultado` vacío. Eso **no** es lo mismo que `SKIPPED`.
+
+Los sidecar viven en `reports/` (git-ignored). Si quieres conservar uno como
+evidencia, cópialo fuera antes de la siguiente corrida.
+
+> Este comando todavía no funciona: `reannotate.py` está escrito contra otro
+> contrato. Ver [Arquitectura pendiente](#arquitectura-pendiente).
 
 ---
 
@@ -467,13 +886,22 @@ Commit por separado, no mezclar con implementación.
   - Una matriz CSV → un change (`add-test-...-matriz-<nombre>`).
 - **Cero literales de negocio en tests**. Todo pasa por `{{...}}`.
 - **Prefijos**: `GLB-*` global, `TC-XXX-*` exclusivo del caso,
-  `MTZ-<endpoint>-<campo>-<abrev>` exclusivo de matriz.
+  `MTZ-<endpoint>-<campo>-<slug_indicacion>` exclusivo de matriz.
 - **Soft assertions**: `pytest_check.check(...)` en todas las
   validaciones salvo la primera (status code HTTP), que sí es `assert`
   duro.
 - **BD**: SQLAlchemy Core con AUTOCOMMIT. No transacciones desde tests.
 - **Matriz siempre con `-x`**. Sin excepción.
-- **Assert de espejo solo por key JSON exacta**. Sin substring matching.
+- **El CSV de `inputs/` nunca se modifica.** Los resultados van al sidecar
+  en `reports/`.
+- **Assert de espejo solo por key JSON exacta**, sin substring matching, y
+  solo en casos con `status < 400` (incluye el `206`).
+- **`(ausente)` no es `null`.** `(ausente)` omite la key; `(vacío)` la emite
+  con `""`.
+- **Discrepancia real = hallazgo, no ajuste.** `xfail(strict=True)` más
+  entrada en `inputs/<endpoint-slug>/hallazgos.md`.
+- **La `Prioridad` del CSV es metadato de implementación**, no de ejecución.
+  No genera markers ni filtra corridas.
 - **`docs/generators-catalog.md` nunca se edita a mano**. Se regenera
   con `python -m framework.generators --catalog`.
 - **Claude NUNCA ejecuta pytest** contra el ambiente. Tú ejecutas.
@@ -499,9 +927,29 @@ flags `--json-report --json-report-file=reports/resultados.json`.
 `variables.yaml` o `.env` completo. El framework debe fallar con
 mensaje claro; si no, es un bug del cargador de variables.
 
-**Matriz falla en la primera columna sin razón aparente**: revisa la
+**Matriz falla en la primera fila (`V1`) sin razón aparente**: revisa la
 sección `Mirror keys en respuesta` de `docs.md` — probablemente hay una
 key declarada como `Sí` que la respuesta real no incluye como key JSON.
+
+**La primera columna del CSV se llama `﻿Campo` en vez de `Campo`**: se
+abrió con `utf-8` en vez de `utf-8-sig`. Los CSV del proyecto generador
+vienen en UTF-8 **con BOM**.
+
+**La matriz entera falla con el mismo error de validación**: revisa si el
+campo es de tipo `String (arreglo JSON)`. Esos viajan serializados como
+string (`"apps": "[\"uuid\"]"`), no como arreglo nativo.
+
+**Los ids `V<n>`/`I<n>` no coinciden con los del sidecar anterior**: el CSV
+se regeneró y la identidad es posicional. Compara el hash contra el del
+change archivado y vuelve a correr la matriz completa.
+
+**Alguna celda del CSV trae `<campo>.<id> | <valor>`**: el archivo no pasó
+la fase de limpieza del proyecto generador. Devuélvelo para limpiar; no lo
+consumas así.
+
+**Un change de matriz se detiene tras el proposal**: es el comportamiento
+esperado hoy. Faltan `matrix.py`, `generators.py` y `mirror.py` — ver
+[Arquitectura pendiente](#arquitectura-pendiente).
 
 **Generador nuevo no aparece en el catálogo**: no se regeneró
 `docs/generators-catalog.md`. Ejecuta manualmente:
