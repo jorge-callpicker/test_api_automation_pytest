@@ -1,0 +1,10 @@
+Campo;buttons.type;buttons.title;buttons.payload;Código HTTP Esperado;Prioridad
+¿Requerido?;Sí;Sí;Sí;;
+Tipo Validación;Cruzada;Independiente;Cruzada;;
+Tipo de Dato;String;String;String;;
+1;PHONE_NUMBER;(texto típico, longitud media);(número típico de dígitos, para PHONE_NUMBER);200;medio
+2;PHONE_NUMBER;(texto típico, longitud media);(número de longitud máxima, 20 dígitos);200;alto
+3;PHONE_NUMBER;(texto típico, longitud media);(PHONE_NUMBER: número nacional típico, solo dígitos);200;alto
+4;PHONE_NUMBER;(texto típico, longitud media);(PHONE_NUMBER: número internacional típico, con código de país, solo dígitos);200;alto
+5;PHONE_NUMBER;(texto típico, longitud media);(PHONE_NUMBER con caracteres no numéricos);400;alto
+6;PHONE_NUMBER;(texto típico, longitud media);(PHONE_NUMBER de longitud 21, por encima del máximo);400;alto

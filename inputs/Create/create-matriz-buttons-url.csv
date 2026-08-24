@@ -1,0 +1,12 @@
+Campo;buttons.type;buttons.title;buttons.payload;Código HTTP Esperado;Prioridad
+¿Requerido?;Sí;Sí;Sí;;
+Tipo Validación;Cruzada;Independiente;Cruzada;;
+Tipo de Dato;String;String;String;;
+1;URL;(texto típico, longitud media);(URL típica http, terminada en dominio válido);200;medio
+2;URL;(texto típico, longitud media);(URL típica https, terminada en dominio válido);200;medio
+3;URL;(texto típico, longitud media);(URL de longitud máxima, 2000 caracteres);200;alto
+4;URL;(texto típico, longitud media);(URL válida con múltiples niveles de subdominio);200;medio
+5;URL;(texto típico, longitud media);(URL sin protocolo http/https);400;alto
+6;URL;(texto típico, longitud media);(URL con espacios o tabulaciones);400;medio
+7;URL;(texto típico, longitud media);(URL que no termina en un punto seguido de letras/números);400;alto
+8;URL;(texto típico, longitud media);(URL de longitud 2001, por encima del máximo);400;alto

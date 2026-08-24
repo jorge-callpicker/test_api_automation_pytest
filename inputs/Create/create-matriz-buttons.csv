@@ -1,0 +1,23 @@
+Campo;buttons.type;buttons.title;buttons.payload;Código HTTP Esperado;Prioridad
+¿Requerido?;Sí;Sí;Sí;;
+Tipo Validación;Cruzada;Independiente;Cruzada;;
+Tipo de Dato;String;String;String;;
+1;QUICK_REPLY;(texto típico, longitud media);(texto típico, longitud media, para QUICK_REPLY);200;medio
+2;QUICK_REPLY;(longitud mínima, 1 carácter);(longitud mínima, 1 carácter, para QUICK_REPLY);200;alto
+3;QUICK_REPLY;(longitud máxima, 25 caracteres);(longitud máxima, 25 caracteres, para QUICK_REPLY);200;alto
+4;QUICK_REPLY;(cadena que alterna entre mayúsculas y minúsculas);(texto típico, longitud media, para QUICK_REPLY);200;medio
+5;QUICK_REPLY;(cadena de solo números);(longitud mínima, 1 carácter, para QUICK_REPLY);200;alto
+6;QUICK_REPLY;(cadena de caracteres especiales);(longitud máxima, 25 caracteres, para QUICK_REPLY);200;alto
+7;QUICK_REPLY;(cadena que alterna entre letras, números y caracteres especiales);(texto típico, longitud media, para QUICK_REPLY);200;medio
+8;(valor fuera de la lista blanca);(texto típico, longitud media);(texto típico, longitud media, para QUICK_REPLY);400;alto
+9;(ausente);(texto típico, longitud media);(texto típico, longitud media, para QUICK_REPLY);400;alto
+10;(valor de la lista blanca en minúsculas, ej. quick_reply);(texto típico, longitud media);(texto típico, longitud media, para QUICK_REPLY);400;alto
+11;QUICK_REPLY;(ausente);(texto típico, longitud media, para QUICK_REPLY);400;alto
+12;QUICK_REPLY;(vacío o solo espacios);(texto típico, longitud media, para QUICK_REPLY);400;medio
+13;QUICK_REPLY;(longitud 26, por encima del máximo);(texto típico, longitud media, para QUICK_REPLY);400;alto
+14;QUICK_REPLY;(contiene salto de línea);(texto típico, longitud media, para QUICK_REPLY);400;medio
+15;QUICK_REPLY;(contiene retorno de carro o tabulación);(texto típico, longitud media, para QUICK_REPLY);400;medio
+16;QUICK_REPLY;(texto típico, longitud media);(ausente);400;alto
+17;QUICK_REPLY;(texto típico, longitud media);(vacío o solo espacios, para QUICK_REPLY);400;medio
+18;QUICK_REPLY;(texto típico, longitud media);(longitud 26, por encima del máximo, para QUICK_REPLY);400;alto
+19;QUICK_REPLY;(texto típico, longitud media);(contiene salto de línea, para QUICK_REPLY);400;medio
