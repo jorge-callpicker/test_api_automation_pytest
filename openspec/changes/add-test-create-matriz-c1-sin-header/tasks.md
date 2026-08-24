@@ -7,12 +7,9 @@
 
 ## 2. `src/framework/matrix.py`
 
-- [ ] 2.1 Implementar `MatrixCase` (`id`, `campo_num`, `http_code`, `priority`, `values: dict[str, str]`) y `parse_matrix(csv_path) -> list[MatrixCase]`: lectura `;` / `utf-8-sig`, salto de las 3 filas de metadata, derivación de ids `V<n>`/`I<n>` posicional por grupo según `Código HTTP Esperado` (`< 400` → V, `>= 400` → I).
-- [ ] 2.2 Implementar `mtz_slug(cell_text, *, existing=()) -> str`: minúsculas, sin acentos, `_` entre palabras, catálogo de abreviaturas de `config.yaml` cuando encaje, truncado a las primeras palabras significativas, extendiendo el truncado si colisiona con `existing`.
-- [ ] 2.3 Implementar `build_payload(case, base_request, field_types, resolved) -> dict`: `(ausente)` omite la key, `(vacío)` la emite como `""`, campos con `field_types[campo] == "String (arreglo JSON)"` se serializan con `json.dumps(...)` como string.
-- [ ] 2.4 Extender `variables.py::resolve()` para reconocer `MTZ-*` resuelto desde `variables.yaml → matrix_values`, delegando en `generators.py::run(name, **params)` cuando el valor almacenado es un dict `{generator, params}` (sin cachear entre filas). No modificar la rama existente de `GLB-*`/`TC-XXX-*`.
-- [ ] 2.5 Regenerar el catálogo de 101 nombres `MTZ-create-*` corriendo `mtz_slug` real sobre las 110 celdas únicas del CSV; diffear contra los nombres ya listados en `proposal.md` y corregir `variables.yaml` (nunca `design.md`/`proposal.md` como fuente de verdad tardía) si algo no coincide. Documentar el diff aquí si hubo alguno.
-- [ ] 2.6 Unit test de `matrix.py` (fuera de la suite de matriz de negocio) que valide `parse_matrix` sobre `create-matriz-c1-sin-header.csv`: 73 casos, 8 `V`, 65 `I`, y que `mtz_slug` no produzca colisiones dentro de un mismo campo.
+- [ ] 2.1 Implementar `build_payload(base_request: dict, deviations: dict[str, Any], field_types: dict[str, str]) -> dict`: `(ausente)` omite la key, `(vacío)` la emite como `""`, campos con `field_types[campo] == "String (arreglo JSON)"` se serializan con `json.dumps(...)` como string. Función pura, sin lectura de CSV ni de `variables.yaml`.
+- [ ] 2.2 Extender `variables.py::resolve()` para reconocer `MTZ-*` resuelto desde `variables.yaml → matrix_values`, delegando en `generators.py::run(name, **params)` cuando el valor almacenado es un dict `{generator, params}` (sin cachear entre filas). No modificar la rama existente de `GLB-*`/`TC-XXX-*`.
+- [ ] 2.3 Unit test de `build_payload` con fixtures literales (sin CSV): casos `(ausente)`/`(vacío)`/serialización `String (arreglo JSON)`, y un caso de regresión para `resolve()` con `MTZ-*` y con `{generator, params}`.
 
 ## 3. `src/framework/generators.py`
 
@@ -27,7 +24,7 @@
 
 ## 5. Validación de aceptación de los módulos de framework (bloqueante)
 
-- [ ] 5.1 **[BLOQUEANTE]** Ejecutar el unit test de `matrix.py` (2.6), `python -m framework.generators --catalog` (3.2/3.3), y `ruff check src/framework/matrix.py src/framework/generators.py src/framework/mirror.py`. Entregar la salida de los tres al QA antes de continuar con la sección 6. No seguir sin confirmación explícita de que los tres pasaron.
+- [ ] 5.1 **[BLOQUEANTE]** Ejecutar el unit test de `matrix.py` (2.3), `python -m framework.generators --catalog` (3.2/3.3), y `ruff check src/framework/matrix.py src/framework/generators.py src/framework/mirror.py`. Entregar la salida de los tres al QA antes de continuar con la sección 6. No seguir sin confirmación explícita de que los tres pasaron.
 
 ## 6. Petición base y semántica de celdas del contexto `c1-sin-header`
 
@@ -35,7 +32,7 @@
 
 ## 7. Variables `MTZ-create-*` (matrix_values)
 
-- [ ] 7.1 Crear las 101 variables `MTZ-create-*` (catálogo regenerado en 2.5) en `variables.yaml → matrix_values:`, cada una con el comentario de la indicación original del CSV.
+- [ ] 7.1 Crear las 101 variables `MTZ-create-*` (catálogo ya fijado en `proposal.md`, sin necesidad de regenerarlo — ver decisión 1 de `design.md`) en `variables.yaml → matrix_values:`, cada una con el comentario de la indicación original del CSV.
 - [ ] 7.2 Aplicar la corrección de `body_var` documentada en `Why` del proposal: `V1`/`V3`/`V7` usan `MTZ-create-body_var-ausente`; `V5` usa `MTZ-create-body_var-arreglo_con_10_elementos_correspondientes_a`.
 - [ ] 7.3 Referenciar `unique_lowercase` desde los 3 `MTZ-create-name-nombre_unico_*` con `generator:`/`params:`.
 - [ ] 7.4 `buttons` y `body_var` compuestos se materializan como literal JSON completo en su propia variable `MTZ-create-*` (Opción A) — no requieren composición desde las matrices anidadas de `buttons`.
@@ -48,17 +45,18 @@
 
 ## 9. Resolución del header de sesión (`api_access_token`)
 
-- [ ] 9.1 Para los 71 casos que requieren sesión válida, invocar `framework.auth.obtain_session_tokens("Admin", settings=..., http_client=..., account_id=<account_id de la fila>)` directamente desde `matrix.py` por caso parametrizado (decisión 7 de `design.md`) — rol fijo `Admin`, este change no cubre `SuperAdmin`.
+- [ ] 9.1 Para los 71 casos que requieren sesión válida, invocar `framework.auth.obtain_session_tokens("Admin", settings=..., http_client=..., account_id=<account_id de la fila>)` directamente desde el test por caso parametrizado (decisión 5 de `design.md`) — rol fijo `Admin`, este change no cubre `SuperAdmin`.
 - [ ] 9.2 Materializar `I64` (header ausente: no enviar `api-access-token`) e `I65` (`MTZ-create-api_access_token-token_invalido_o_expirado`, un valor estático que no corresponda a ninguna sesión vigente).
 
 ## 10. Test parametrizado y aserciones
 
-- [ ] 10.1 Implementar `test_matriz_create_c1_sin_header` con un único `pytest.mark.parametrize` sobre las 73 filas (`V1..V8`, `I1..I65`), usando `parse_matrix`.
-- [ ] 10.2 Primera aserción — status code HTTP — como `assert` duro.
-- [ ] 10.3 Resto de aserciones de cada caso con `pytest_check.check(...)` (soft assertions).
-- [ ] 10.4 No invocar `assert_mirror` (ver 4.2).
-- [ ] 10.5 Si alguna fila revela que el endpoint se comporta distinto a lo declarado por la matriz o `docs.md`, marcar ese caso con `pytest.mark.xfail(strict=True, reason=...)` citando el id (`V<n>`/`I<n>`) y la discrepancia, y registrarlo en `inputs/Create/hallazgos.md` (crear el archivo si es el primer hallazgo).
-- [ ] 10.6 Anotar resultados en el sidecar `reports/anotado-create-matriz-c1-sin-header.csv` (nunca sobrescribir el CSV de `inputs/`), preservando el BOM `utf-8-sig`. Si `reannotate.py` no soporta aún el contrato de matriz (delimitador/BOM/columna `Campo`/ids `[V<n>]`), anotar manualmente para esta corrida — su reescritura queda fuera de alcance de este change (ver Non-Goals en `design.md`).
+- [ ] 10.1 **Leer el CSV una única vez** y transcribir sus 73 filas como tabla Python literal (lista de `pytest.param(id="V1"/"I1", http=..., deviations={campo: "{{MTZ-create-...}}", ...})`) dentro de `tests/test_matriz_create_c1_sin_header.py`. A partir de aquí ningún código vuelve a leer `inputs/Create/create-matriz-c1-sin-header.csv` — es la única tarea de esta sección que toca el archivo de entrada.
+- [ ] 10.2 Implementar `test_matriz_create_c1_sin_header` con un único `pytest.mark.parametrize` sobre esa tabla literal (73 casos: `V1..V8`, `I1..I65`), resolviendo cada `deviation` vía `resolve()` y construyendo el payload con `build_payload`.
+- [ ] 10.3 Primera aserción — status code HTTP — como `assert` duro.
+- [ ] 10.4 Resto de aserciones de cada caso con `pytest_check.check(...)` (soft assertions).
+- [ ] 10.5 No invocar `assert_mirror` (ver 4.2).
+- [ ] 10.6 Si alguna fila revela que el endpoint se comporta distinto a lo declarado por la matriz o `docs.md`, marcar ese caso con `pytest.mark.xfail(strict=True, reason=...)` citando el id (`V<n>`/`I<n>`) y la discrepancia, y registrarlo en `inputs/Create/hallazgos.md` (crear el archivo si es el primer hallazgo).
+- [ ] 10.7 Anotar resultados en el sidecar `reports/anotado-create-matriz-c1-sin-header.csv` (nunca sobrescribir el CSV de `inputs/`), preservando el BOM `utf-8-sig`. Si `reannotate.py` no soporta aún el contrato de matriz (delimitador/BOM/columna `Campo`/ids `[V<n>]`), anotar manualmente para esta corrida — su reescritura queda fuera de alcance de este change (ver Non-Goals en `design.md`).
 
 ## 11. Actualización de `openspec/config.yaml`
 
