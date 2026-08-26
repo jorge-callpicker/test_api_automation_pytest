@@ -12,6 +12,11 @@ def client(settings: Settings) -> httpx.Client:
     instance.last_request = None
 
     def _track_last_request(request: httpx.Request) -> None:
+        # request.content de un body multipart/streaming solo es accesible
+        # tras llamar read() -- hay que forzarlo aqui, antes de que el
+        # transporte consuma el stream al enviarlo, para que to_curl() pueda
+        # leerlo despues (ej. en el reporte de un test fallido).
+        request.read()
         instance.last_request = request
 
     instance.event_hooks["request"] = [_track_last_request]

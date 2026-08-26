@@ -15,7 +15,13 @@ Tipo de change: `add-test-create-matriz-c1-sin-header` — matriz CSV completa (
 
 Se resuelve con el valor corregido (coherente con la regla cruzada de `docs.md`), documentado aquí; el CSV de `inputs/` permanece sin tocar.
 
-**Riesgo de ambiente a verificar por el QA** (no bloquea el proposal): las filas V1/V3/V5/V7 usan `account_id = 1` ("mínimo del rango") como cuenta válida existente para un caso de éxito. El único `account_id` de prueba confirmado hasta ahora en el proyecto es `65` (`GLB-account_id_valido`). Si la cuenta `1` no existe en el ambiente, estas 4 filas fallarán por causa ambiental, no por el test — se deja como tarea de verificación, no se asume.
+**El CSV se regeneró cuatro veces durante la implementación de este change**:
+1. Hash `81eeefcf5e42edd90e926c7e31d23a45cb0a122ed8483f2e45a80b38a6bfda8b` → `20c099ee89ad6f0860926e81da3311c2ba99d52e490d88f984e864bfef6c42be`. El QA confirmó que el único cambio es la corrección de `body_var` a `(ausente)` en **I1–I40 e I53–I65** (53 filas) — la misma inconsistencia `body`/`body_var` descrita arriba, pero en filas de error donde el campo bajo prueba es otro (`account_id`/`name`/`category`/`lang`/`apps` para I1–I40, `buttons` para I53–I65). Verificado programáticamente: mismas 73 filas, mismos ids, mismos códigos HTTP, misma prioridad — sin corrimiento de ids. `I41`–`I46` (donde `body` es el campo bajo prueba) e `I47`–`I52` (donde `body_var` es el campo bajo prueba) se mantuvieron sin cambios en esa primera regeneración, por decisión explícita del QA.
+2. Hash `20c099ee89ad6f0860926e81da3311c2ba99d52e490d88f984e864bfef6c42be` → `84a8fc11780267ad21f8c34088c0116cec3802a1ec878096460b831b2949307e`, descubierto durante la primera corrida real: `I47` fallaba (esperado 400, recibido 200) porque su `body` (fila 58, sin variables `{{n}}`) nunca coincidía con la exigencia de `body_var` de "(ausente cuando body contiene variables)" — el mismo patrón de inconsistencia `body`/`body_var`, no cubierto por la corrección anterior. El QA corrigió `body_var` de esta fila a `(ausente)` en el CSV, igual que en I1–I40/I53–I65. Verificado: única fila cambiada.
+3. Hash `84a8fc11780267ad21f8c34088c0116cec3802a1ec878096460b831b2949307e` → sin cambio de contenido (misma corrida, mismo archivo — `I12` se reconfirmó `PASSED` sin necesidad de tocar el CSV; su primer `200` inesperado se debió a que la plantilla `wa_prueba_envio` recién se había creado en la corrida anterior, no a un bug).
+4. Hash `84a8fc11780267ad21f8c34088c0116cec3802a1ec878096460b831b2949307e` → `949fbbcad7411fda40ea5cc95262d3c9739f551035f2584a00138860bbbe8a22`: con `body_var` ya en `(ausente)`, la fila 58 (`I47`) dejó de violar la regla cruzada `body`↔`body_var` (su `body` no tenía variables), pero `Código HTTP Esperado` seguía en `400` — inconsistencia detectada en la corrida real (ver `tasks.md` §12.1). El QA decidió preservar la intención original de la fila ("`body_var` ausente cuando `body` **sí** contiene variables") en vez de relajar el código esperado: corrigió `body` a `(texto con el mínimo de variables, 1 variable {{1}})` — el mismo texto que ya usa `V6` — dejando `body_var = (ausente)` y `400` sin tocar. La fila vuelve a ser internamente consistente y a probar lo que su nombre original indicaba. Verificado: única celda cambiada (`body` de la fila 58).
+
+**Riesgo de ambiente verificado por el QA (resuelto)**: las filas V1/V3/V5/V7 usaban `account_id = 1` ("mínimo del rango") como cuenta válida existente para un caso de éxito, y el único `account_id` confirmado en el ambiente era `65`. El QA modificó `MTZ-create-account_id-minimo_del_rango` en `variables.yaml` de `1` a `65` — la cuenta `1` no se usa como sesión ni como valor de campo en ningún caso de esta matriz.
 
 ## What Changes
 
@@ -29,7 +35,7 @@ Se resuelve con el valor corregido (coherente con la regla cruzada de `docs.md`)
 - **Alcance de rol**: este change cubre únicamente el rol `Admin` (credenciales `USR_ADMIN`/`PSW_ADMIN` de `.env`). El rol `SuperAdmin` no se implementa en este change.
 - `buttons` y `body_var` se materializan como literales JSON completos dentro de su propia variable `MTZ-create-*` (Opción A, acordada): no se abre `design.md` para un patrón de composición reutilizable.
 - Mirror keys: **ninguna** — `docs.md` declara explícitamente "No hay campos que validar en esta sección".
-- Hash SHA-256 del CSV implementado: `81eeefcf5e42edd90e926c7e31d23a45cb0a122ed8483f2e45a80b38a6bfda8b`. No existe change archivado previo sobre este CSV con el que comparar.
+- Hash SHA-256 del CSV implementado: `949fbbcad7411fda40ea5cc95262d3c9739f551035f2584a00138860bbbe8a22` (regenerado cuatro veces durante la implementación — ver nota en `Why`). No existe change archivado previo sobre este CSV con el que comparar.
 
 ### Inventario de casos (73 filas → V1–V8, I1–I65)
 
@@ -136,7 +142,7 @@ Orden de escritura/revisión sugerido: primero todas las filas `Prioridad: alto`
 | MTZ-create-body-mas_de_10_variables | (más de 10 variables) | I44 |
 | MTZ-create-body-texto_compuesto_unicamente_por_variables | (texto compuesto únicamente por variables, sin texto fijo alrededor) | I46 |
 | MTZ-create-body-texto_con_el_maximo_de_10 | (texto con el máximo de 10 variables secuenciales) | V5 |
-| MTZ-create-body-texto_con_el_minimo_de_variables | (texto con el mínimo de variables, 1 variable {{1}}) | V6 |
+| MTZ-create-body-texto_con_el_minimo_de_variables | (texto con el mínimo de variables, 1 variable {{1}}) — **[reutilizada]** en I47 tras la 4ª regeneración del CSV (ver `Why`) | V6,I47 |
 | MTZ-create-body-texto_tipico_con_variables_secuenciales_1 | (texto típico con variables secuenciales {{1}} a {{3}}) | V2,V8 |
 | MTZ-create-body-texto_tipico_sin_variables | (texto típico sin variables, longitud media) | V1,V7,I1–I40,I47–I65 (correlativos) |
 | MTZ-create-body-vacio | (vacío) | I42 |
@@ -144,9 +150,8 @@ Orden de escritura/revisión sugerido: primero todas las filas `Prioridad: alto`
 | MTZ-create-body_var-arreglo_con_10_elementos_correspondientes_a | **[corregido]** (arreglo con 10 elementos correspondientes a las variables de body) | V5 |
 | MTZ-create-body_var-arreglo_con_exactamente_1_elemento | (arreglo con exactamente 1 elemento, límite mínimo de variables) | V6 |
 | MTZ-create-body_var-arreglo_con_tres_elementos | (arreglo con tres elementos, valores típicos) | V2,V8 |
-| MTZ-create-body_var-arreglo_con_un_elemento_correspondiente_a | (arreglo con un elemento correspondiente a una variable de body) | I1–I46,I53–I65 (correlativos, sin V1/V3/V7) |
-| MTZ-create-body_var-ausente_cuando_body_contiene_variables | (ausente cuando body contiene variables) | I47 |
-| MTZ-create-body_var-ausente | **[corregido]** (ausente) | V1,V3,V7 |
+| MTZ-create-body_var-arreglo_con_un_elemento_correspondiente_a | (arreglo con un elemento correspondiente a una variable de body) | I41,I42,I43,I44,I45,I46 |
+| MTZ-create-body_var-ausente | (ausente) — **[corregido]** en V1,V3,V7; ya venía así en el CSV regenerado para I1–I40,I53–I65,I47 | V1,V3,V7,I1–I40,I47,I53–I65 |
 | MTZ-create-body_var-cantidad_de_elementos_distinta_a_la | (cantidad de elementos distinta a la cantidad de variables en body) | I50 |
 | MTZ-create-body_var-elemento_con_4_o_mas_espacios | (elemento con 4 o más espacios consecutivos) | I52 |
 | MTZ-create-body_var-elemento_con_salto_de_linea | (elemento con salto de línea) | I51 |
@@ -217,7 +222,7 @@ Orden de escritura/revisión sugerido: primero todas las filas `Prioridad: alto`
 | MTZ-create-type-valor_de_la_lista_blanca_en | (valor de la lista blanca en minúsculas, ej. text) | I40 |
 | MTZ-create-type-valor_fuera_de_la_lista_blanca | (valor fuera de la lista blanca) | I36 |
 
-Las tres entradas `name-nombre_unico_*` son Ruta 2 (runtime): disparador de Unicidad ("no usado antes"). El generador `unique_lowercase(length)` que las resuelve **sí se implementa en este change** — ver `design.md` (decisión 5) y `tasks.md` § 3. `MTZ-create-buttons-mas_de_10_botones_quick_reply` (11 botones, contenido indiferente) es candidato a Ruta 2 por disparador de Volumen, pero `design.md` (Non-Goals) limita explícitamente el alcance de generadores de este change a `unique_lowercase` — por la regla de oro ("si dudas, estática") queda en Ruta 1: se materializa como un literal de 11 botones `QUICK_REPLY` escrito a mano en `MTZ-create-buttons-mas_de_10_botones_quick_reply`. Construir un generador genérico de "N botones" queda fuera de alcance, no bloquea este change.
+Las tres entradas `name-nombre_unico_*` son Ruta 2 (runtime): disparador de Unicidad ("no usado antes"). El generador `unique_lowercase(length)` que las resuelve **sí se implementa en este change** — ver `design.md` (decisión 3) y `tasks.md` § 3. `MTZ-create-buttons-mas_de_10_botones_quick_reply` (11 botones, contenido indiferente) es candidato a Ruta 2 por disparador de Volumen, pero `design.md` (Non-Goals) limita explícitamente el alcance de generadores de este change a `unique_lowercase` — por la regla de oro ("si dudas, estática") queda en Ruta 1: se materializa como un literal de 11 botones `QUICK_REPLY` escrito a mano en `MTZ-create-buttons-mas_de_10_botones_quick_reply`. Construir un generador genérico de "N botones" queda fuera de alcance, no bloquea este change.
 
 ### Variables `GLB-create-*` de resolución sembrada (Ruta 3, 8 variables)
 
@@ -253,5 +258,6 @@ Las tres entradas `name-nombre_unico_*` son Ruta 2 (runtime): disparador de Unic
 - `variables.yaml` — 101 entradas nuevas en `matrix_values:` y 8 en `globals:`.
 - `openspec/config.yaml` — actualizar § "Arquitectura objetivo — pendiente de implementación": los tres módulos dejan de estar pendientes; ajustar la tabla de estado y la redacción del "Freno duro" (pasa de "no existen" a condicional, ya no aplica a este ni a futuros changes de matriz). Ver tarea dedicada en `tasks.md`.
 - `docs/generators-catalog.md` — se regenera con `python -m framework.generators --catalog` tras añadir `unique_lowercase`.
+- **Fix descubierto en ejecución**: `src/framework/http.py::client()` — el hook que captura `last_request` ahora llama `request.read()` antes de guardarlo. Sin esto, `to_curl()` lanzaba `httpx.RequestNotRead` al reportar cualquier fallo de un request `multipart/form-data` (los que este change introduce vía `files=`); los tests `TC-XXX`/`SMOKE-*` existentes no lo habían expuesto porque no envían archivos.
 - `tests/conftest.py` no se modifica: `matrix.py` invoca `auth.obtain_session_tokens` directamente con el `account_id` de cada caso en vez de depender del fixture `session_tokens` cacheado (ver `design.md`).
 - **Precedente roto conscientemente**: este change ya no es puramente "un tipo por change" (`config.yaml` § Dos tipos de change proposal) — construye infraestructura de framework además de la matriz. Se documenta como excepción explícita en `Why`, no como nuevo patrón por defecto.

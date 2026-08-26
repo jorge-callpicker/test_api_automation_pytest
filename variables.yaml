@@ -22,7 +22,7 @@
 
 globals:
   GLB-account_id_valido: 65
-  GLB-inbox_id_valido: "[REQUIERE RESPUESTA: entero entre 1 y 2147483648 correspondiente a un inbox válido asociado a la cuenta anterior. Ejemplo: 5]"
+  GLB-inbox_id_valido: 100
 
   #GLB-url_cp_api: "https://black.digitum.com.mx/chucho/callpicker_api/api_develop"
   GLB-url_cp_api: "https://black.digitum.com.mx/paloma/callpicker_api/api_develop"
@@ -37,6 +37,24 @@ globals:
   ## Usuario Admin
   ## Definidas en .env:  USR_ADMIN, PSW_ADMIN
 
+  # --- Sembradas por add-test-create-matriz-c1-sin-header (endpoint create) ---
+  # (cuenta existente, ajena a la sesión)
+  GLB-create-account_id_ajeno: 60
+  # (cuenta inexistente)
+  GLB-create-account_id_inexistente: 100
+  # (arreglo con UUID inexistente o inactivo)
+  GLB-create-app_id_inactivo: ['de84e961-c95e-41ad-baff-c005d422d7db']
+  # (arreglo con UUID que no pertenece a la cuenta)
+  GLB-create-app_id_otra_cuenta: ['26a51522-cb0b-4293-8d72-cd7d4d578d1d']
+  # (arreglo con un único UUID válido de una app existente de la cuenta)
+  GLB-create-app_id_valido: ['6cdd7b59-cbc7-4a47-b2c9-52eae306f136']
+  # (arreglo con un UUID existente modificando o agregando un carácter del string original)
+  GLB-create-app_id_valido_mutado: ['6cdd7b59-cbc7-4a47-b2c9-52eae306fxxx']  # calculado tras sembrar app_id_valido
+  # (arreglo con múltiples UUID válidos de apps existentes de la cuenta)
+  GLB-create-apps_ids_validos: ["6cdd7b59-cbc7-4a47-b2c9-52eae306f136", "4514e6cf-7702-4a83-b3bc-add0347ac54e"]
+  # (nombre ya utilizado en una petición anterior)
+  GLB-create-name_ya_utilizado: 'wa_prueba_envio'
+
 
 test_cases:
 
@@ -50,3 +68,222 @@ test_cases:
   #    tras la ejecución del test — no reutilizar en otros casos.
   #  variables:
   #    TC-001-template_id_sin_envios: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100123]"
+
+
+# =============================================================================
+# MATRIX_VALUES — Variables MTZ-* usadas por tests de matriz CSV
+# =============================================================================
+#
+# Cada variable lleva en el comentario de la línea anterior la indicación
+# original de la celda del CSV. Ver openspec/changes/add-test-create-matriz-c1-sin-header/
+# proposal.md para el catálogo completo con la lista de casos (V/I) que usa cada una.
+
+matrix_values:
+# tests\test_matriz_create_c1_sin_header.py
+  # 65
+  MTZ-create-account_id-65: 65
+  # (ausente)
+  MTZ-create-account_id-ausente: __AUSENTE__
+  # (mínimo del rango, 1)
+  #MTZ-create-account_id-minimo_del_rango: 1
+  MTZ-create-account_id-minimo_del_rango: 65
+  # (vacío)
+  MTZ-create-account_id-vacio: ''
+  # (ausente)
+  MTZ-create-api_access_token-ausente: __AUSENTE__
+  # (token inválido o expirado)
+  MTZ-create-api_access_token-token_invalido_o_expirado: invalid.session.token
+  # (arreglo con elemento con caracteres especiales, no es un UUID)
+  MTZ-create-apps-arreglo_con_elemento_con_caracteres_especiales: [uuid#$%-invalido]
+  # (arreglo con un elemento que no es un UUID válido)
+  MTZ-create-apps-arreglo_con_un_elemento_que_no: [no-es-un-uuid]
+  # (arreglo JSON vacío, sin elementos)
+  MTZ-create-apps-arreglo_json_vacio: []
+  # (arreglo con elemento compuesto solo de letras, no es un UUID)
+  MTZ-create-apps-arreglo_solo_letras: [abcdefghijkl]
+  # (arreglo con elemento compuesto solo de números, no es un UUID)
+  MTZ-create-apps-arreglo_solo_numeros: ['123456789012']
+  # (ausente)
+  MTZ-create-apps-ausente: __AUSENTE__
+  # (no es un arreglo JSON válido)
+  MTZ-create-apps-no_es_un_arreglo_json_valido: esto no es un arreglo json
+  # (vacío)
+  MTZ-create-apps-vacio: ''
+  # (ausente cuando category≠AUTHENTICATION)
+  MTZ-create-body-ausente_cuando_category_authentication: __AUSENTE__
+  # (longitud 1025, por encima del máximo)
+  MTZ-create-body-longitud_1025: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # (longitud máxima, 1024 caracteres)
+  MTZ-create-body-longitud_maxima: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx{{1}}
+  # (longitud mínima, 1 carácter)
+  MTZ-create-body-longitud_minima: x
+  # (más de 10 variables)
+  MTZ-create-body-mas_de_10_variables: '{{1}} {{2}} {{3}} {{4}} {{5}} {{6}} {{7}} {{8}} {{9}} {{10}} {{11}}'
+  # (texto compuesto únicamente por variables, sin texto fijo alrededor)
+  MTZ-create-body-texto_compuesto_unicamente_por_variables: '{{1}}{{2}}{{3}}'
+  # (texto con el máximo de 10 variables secuenciales)
+  MTZ-create-body-texto_con_el_maximo_de_10: campo1:{{1}} campo2:{{2}} campo3:{{3}} campo4:{{4}} campo5:{{5}} campo6:{{6}} campo7:{{7}} campo8:{{8}} campo9:{{9}} campo10:{{10}}
+  # (texto con el mínimo de variables, 1 variable {{1}})
+  MTZ-create-body-texto_con_el_minimo_de_variables: Hola {{1}}, gracias por tu compra.
+  # (texto típico con variables secuenciales {{1}} a {{3}})
+  MTZ-create-body-texto_tipico_con_variables_secuenciales_1: Hola {{1}}, tienes {{2}} puntos que vencen en {{3}} días
+  # (texto típico sin variables, longitud media)
+  MTZ-create-body-texto_tipico_sin_variables: Este es un mensaje de prueba para la plantilla de ejemplo.
+  # (vacío)
+  MTZ-create-body-vacio: ''
+  # (variables fuera de secuencia, con huecos o repeticiones)
+  MTZ-create-body-variables_fuera_de_secuencia: '{{2}} {{1}} {{1}}'
+  # (arreglo con 10 elementos correspondientes a las variables de body)
+  MTZ-create-body_var-arreglo_con_10_elementos_correspondientes_a: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+  # (arreglo con exactamente 1 elemento, límite mínimo de variables)
+  MTZ-create-body_var-arreglo_con_exactamente_1_elemento: [valor1]
+  # (arreglo con tres elementos, valores típicos)
+  MTZ-create-body_var-arreglo_con_tres_elementos: [Elias, '500', tres]
+  # (arreglo con un elemento correspondiente a una variable de body)
+  MTZ-create-body_var-arreglo_con_un_elemento_correspondiente_a: [valor de prueba]
+  # (ausente)
+  MTZ-create-body_var-ausente: __AUSENTE__
+  # (cantidad de elementos distinta a la cantidad de variables en body)
+  MTZ-create-body_var-cantidad_de_elementos_distinta_a_la: [a, b]
+  # (elemento con 4 o más espacios consecutivos)
+  MTZ-create-body_var-elemento_con_4_o_mas_espacios: [valor    con espacios]
+  # (elemento con salto de línea)
+  MTZ-create-body_var-elemento_con_salto_de_linea: ["valor\ncon salto"]
+  # (elemento de longitud máxima, 1024 caracteres)
+  MTZ-create-body_var-elemento_de_longitud_maxima: ['xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx']
+  # (no es un arreglo JSON válido)
+  MTZ-create-body_var-no_es_un_arreglo_json_valido: esto no es un arreglo json
+  # (vacío)
+  MTZ-create-body_var-vacio: ''
+  # (arreglo con botones agrupados por tipo, cantidad típica)
+  MTZ-create-buttons-arreglo_con_botones_agrupados_por_tipo: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}]
+  # (arreglo con botones QUICK_REPLY, URL y PHONE_NUMBER agrupados por tipo, dentro de límites)
+  MTZ-create-buttons-arreglo_con_botones_quick_reply: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}, {payload: 'https://example.com/1', title: Visitar 1, type: URL}, {payload: 'https://example.com/2', title: Visitar 2, type: URL}, {payload: '5511987654321', title: Llamar 1, type: PHONE_NUMBER}]
+  # (arreglo con botones QUICK_REPLY y PHONE_NUMBER agrupados por tipo, dentro de límites)
+  MTZ-create-buttons-arreglo_con_botones_quick_reply_y: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}, {payload: '5511987654321', title: Llamar 1, type: PHONE_NUMBER}]
+  # (arreglo con botones URL y PHONE_NUMBER agrupados por tipo, dentro de límites)
+  MTZ-create-buttons-arreglo_con_botones_url_y_phone: [{payload: 'https://example.com/1', title: Visitar 1, type: URL}, {payload: '5511987654321', title: Llamar 1, type: PHONE_NUMBER}]
+  # (arreglo con el máximo de 10 botones en total)
+  MTZ-create-buttons-arreglo_con_el_maximo_de_10: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}, {payload: OPCION_3, title: Opcion 3, type: QUICK_REPLY}, {payload: OPCION_4, title: Opcion 4, type: QUICK_REPLY}, {payload: OPCION_5, title: Opcion 5, type: QUICK_REPLY}, {payload: OPCION_6, title: Opcion 6, type: QUICK_REPLY}, {payload: OPCION_7, title: Opcion 7, type: QUICK_REPLY}, {payload: OPCION_8, title: Opcion 8, type: QUICK_REPLY}, {payload: OPCION_9, title: Opcion 9, type: QUICK_REPLY}, {payload: OPCION_10, title: Opcion 10, type: QUICK_REPLY}]
+  # (arreglo con un botón QUICK_REPLY válido)
+  MTZ-create-buttons-arreglo_con_un_boton_quick_reply: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}]
+  # (arreglo JSON vacío, sin elementos)
+  MTZ-create-buttons-arreglo_json_vacio: []
+  # (ausente)
+  MTZ-create-buttons-ausente: __AUSENTE__
+  # (botones del mismo tipo no agrupados, intercalados)
+  MTZ-create-buttons-botones_del_mismo_tipo_no_agrupados: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: 'https://example.com/1', title: Visitar 1, type: URL}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}]
+  # (más de 10 botones en total)
+  MTZ-create-buttons-mas_de_10_botones_en_total: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}, {payload: OPCION_3, title: Opcion 3, type: QUICK_REPLY}, {payload: OPCION_4, title: Opcion 4, type: QUICK_REPLY}, {payload: OPCION_5, title: Opcion 5, type: QUICK_REPLY}, {payload: OPCION_6, title: Opcion 6, type: QUICK_REPLY}, {payload: OPCION_7, title: Opcion 7, type: QUICK_REPLY}, {payload: OPCION_8, title: Opcion 8, type: QUICK_REPLY}, {payload: OPCION_9, title: Opcion 9, type: QUICK_REPLY}, {payload: OPCION_10, title: Opcion 10, type: QUICK_REPLY}, {payload: OPCION_11, title: Opcion 11, type: QUICK_REPLY}]
+  # (más de 10 botones QUICK_REPLY)
+  MTZ-create-buttons-mas_de_10_botones_quick_reply: [{payload: OPCION_1, title: Opcion 1, type: QUICK_REPLY}, {payload: OPCION_2, title: Opcion 2, type: QUICK_REPLY}, {payload: OPCION_3, title: Opcion 3, type: QUICK_REPLY}, {payload: OPCION_4, title: Opcion 4, type: QUICK_REPLY}, {payload: OPCION_5, title: Opcion 5, type: QUICK_REPLY}, {payload: OPCION_6, title: Opcion 6, type: QUICK_REPLY}, {payload: OPCION_7, title: Opcion 7, type: QUICK_REPLY}, {payload: OPCION_8, title: Opcion 8, type: QUICK_REPLY}, {payload: OPCION_9, title: Opcion 9, type: QUICK_REPLY}, {payload: OPCION_10, title: Opcion 10, type: QUICK_REPLY}, {payload: OPCION_11, title: Opcion 11, type: QUICK_REPLY}]
+  # (más de 1 botón PHONE_NUMBER)
+  MTZ-create-buttons-mas_de_1_boton_phone_number: [{payload: '5511987654321', title: Llamar 1, type: PHONE_NUMBER}, {payload: '5511987654322', title: Llamar 2, type: PHONE_NUMBER}]
+  # (más de 2 botones URL)
+  MTZ-create-buttons-mas_de_2_botones_url: [{payload: 'https://example.com/1', title: Visitar 1, type: URL}, {payload: 'https://example.com/2', title: Visitar 2, type: URL}, {payload: 'https://example.com/3', title: Visitar 3, type: URL}]
+  # (no es un arreglo JSON válido)
+  MTZ-create-buttons-no_es_un_arreglo_json_valido: esto no es un arreglo json
+  # (vacío)
+  MTZ-create-buttons-vacio: ''
+  # (ausente)
+  MTZ-create-category-ausente: __AUSENTE__
+  # (caracteres especiales)
+  MTZ-create-category-caracteres_especiales: MARK€TING!
+  # MARKETING
+  MTZ-create-category-marketing: MARKETING
+  # (tipo de dato incorrecto, numérico)
+  MTZ-create-category-tipo_de_dato_incorrecto: 123
+  # UTILITY
+  MTZ-create-category-utility: UTILITY
+  # (vacío)
+  MTZ-create-category-vacio: ''
+  # (valor de la lista blanca en minúsculas, ej. marketing)
+  MTZ-create-category-valor_de_la_lista_blanca_en: marketing
+  # (valor fuera de la lista blanca)
+  MTZ-create-category-valor_fuera_de_la_lista_blanca: PROMOCION
+  # (ausente)
+  MTZ-create-expiration-ausente: __AUSENTE__
+  # (ausente)
+  MTZ-create-file-ausente: __AUSENTE__
+  # (ausente)
+  MTZ-create-footer-ausente: __AUSENTE__
+  # (cadena de caracteres especiales)
+  MTZ-create-footer-cadena_de_caracteres_especiales: '!@#$%^&*()_+-='
+  # (cadena de solo números)
+  MTZ-create-footer-cadena_de_solo_numeros: '1234567890'
+  # (cadena que alterna entre letras, números y caracteres especiales)
+  MTZ-create-footer-cadena_que_alterna_entre_letras: a1!b2@c3#d4$
+  # (cadena que alterna entre mayúsculas y minúsculas)
+  MTZ-create-footer-cadena_que_alterna_entre_mayusculas_y: AbCdEfGhIj
+  # (contiene una variable {{1}}, prohibido)
+  MTZ-create-footer-contiene_una_variable_1: Gracias {{1}} por tu compra
+  # (longitud 61, por encima del máximo)
+  MTZ-create-footer-longitud_61: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # (longitud máxima, 60 caracteres)
+  MTZ-create-footer-longitud_maxima: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # (longitud mínima, 1 carácter)
+  MTZ-create-footer-longitud_minima: x
+  # (texto típico sin variables, longitud media)
+  MTZ-create-footer-texto_tipico_sin_variables: Gracias por su preferencia
+  # (vacío)
+  MTZ-create-footer-vacio: ''
+  # (ausente)
+  MTZ-create-header-ausente: __AUSENTE__
+  # (ausente)
+  MTZ-create-header_var-ausente: __AUSENTE__
+  # (ausente)
+  MTZ-create-lang-ausente: __AUSENTE__
+  # en_US
+  MTZ-create-lang-en_us: en_US
+  # es_MX
+  MTZ-create-lang-es_mx: es_MX
+  # (vacío)
+  MTZ-create-lang-vacio: ''
+  # (valor de la lista blanca en minúsculas, ej. en_us)
+  MTZ-create-lang-valor_de_la_lista_blanca_en: en_us
+  # (valor fuera de la lista blanca)
+  MTZ-create-lang-valor_fuera_de_la_lista_blanca: fr_FR
+  # (ausente)
+  MTZ-create-name-ausente: __AUSENTE__
+  # (contiene caracteres especiales no permitidos)
+  MTZ-create-name-contiene_caracteres_especiales_no_permitidos: nombre@invalido!
+  # (contiene espacios)
+  MTZ-create-name-contiene_espacios: nombre invalido
+  # (contiene mayúsculas, viola el patrón)
+  MTZ-create-name-contiene_mayusculas: Nombre_Invalido
+  # (contiene punto decimal, ej. 12.5)
+  MTZ-create-name-contiene_punto_decimal: '12.5'
+  # (contiene signo negativo, ej. -123)
+  MTZ-create-name-contiene_signo_negativo: '-123'
+  # (longitud 180, por encima del máximo)
+  MTZ-create-name-longitud_180: nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+  # (longitud 2, por debajo del mínimo)
+  MTZ-create-name-longitud_2: ab
+  # (nombre único de longitud máxima, 179 caracteres)
+  MTZ-create-name-nombre_unico_de_longitud_maxima:
+    generator: unique_lowercase
+    params: { length: 179 }
+  # (nombre único de longitud mínima, 3 caracteres)
+  MTZ-create-name-nombre_unico_de_longitud_minima:
+    generator: unique_lowercase
+    params: { length: 3 }
+  # (nombre único no usado antes, longitud típica, minúsculas/dígitos/guion bajo)
+  MTZ-create-name-nombre_unico_no_usado_antes:
+    generator: unique_lowercase
+    params: { length: 12 }
+  # (vacío)
+  MTZ-create-name-vacio: ''
+  # (ausente)
+  MTZ-create-security-ausente: __AUSENTE__
+  # (ausente)
+  MTZ-create-type-ausente: __AUSENTE__
+  # (caracteres especiales)
+  MTZ-create-type-caracteres_especiales: TEXT!
+  # (tipo de dato incorrecto, numérico)
+  MTZ-create-type-tipo_de_dato_incorrecto: 123
+  # (vacío)
+  MTZ-create-type-vacio: ''
+  # (valor de la lista blanca en minúsculas, ej. text)
+  MTZ-create-type-valor_de_la_lista_blanca_en: text
+  # (valor fuera de la lista blanca)
+  MTZ-create-type-valor_fuera_de_la_lista_blanca: AUDIO

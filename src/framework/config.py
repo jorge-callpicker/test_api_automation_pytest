@@ -36,4 +36,5 @@ def load_variables() -> dict:
     return {
         "globals": data.get("globals") or {},
         "test_cases": data.get("test_cases") or {},
+        "matrix_values": data.get("matrix_values") or {},
     }

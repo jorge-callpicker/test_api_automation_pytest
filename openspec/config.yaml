@@ -457,33 +457,38 @@ context: |
   a ejecutarse quedan con `ultimo_resultado` vacío, y eso debe distinguirse
   de un `SKIPPED`.
 
-  # Arquitectura objetivo — pendiente de implementación
+  # Arquitectura objetivo
 
-  La ruta de matriz **no es ejecutable todavía**. El change
-  `add-test-framework-base` quedó archivado incompleto y estos módulos no
-  están disponibles:
+  La ruta de matriz ya es ejecutable. Los módulos que la soportan fueron
+  introducidos por `add-test-create-matriz-c1-sin-header` (primer change de
+  matriz, absorbió esta infraestructura por decisión explícita del QA en vez
+  de abrir un change de framework separado — ver su `proposal.md` § Why):
 
-  | Módulo                        | Rol                                          | Estado           |
-  |-------------------------------|----------------------------------------------|------------------|
-  | `src/framework/matrix.py`     | Parser del CSV, derivación de ids, metadatos | **No existe**    |
-  | `src/framework/generators.py` | Generadores + CLI `--catalog`                | **No existe**    |
-  | `src/framework/mirror.py`     | Assert de espejo por key JSON exacta         | **No existe**    |
-  | `src/framework/reannotate.py` | Sidecar de resultados                        | Existe, no sirve |
+  | Módulo                        | Rol                                                                                                                                                                | Estado                                                                    |
+  |-------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------|
+  | `src/framework/matrix.py`     | `build_payload()` — semántica de payload (ausente/vacío/serialización JSON-string). No parsea CSV: cada change de matriz transcribe sus filas una sola vez, en tiempo de autoría, como tabla Python literal en el test. | Existe                                                                    |
+  | `src/framework/generators.py` | Registro de generadores (Ruta 2) + CLI `--catalog`                                                                                                                 | Existe (`unique_lowercase`)                                               |
+  | `src/framework/mirror.py`     | Assert de espejo por key JSON exacta (`assert_mirror`)                                                                                                             | Existe, sin invocar todavía (ningún endpoint implementado declara mirror keys aún) |
+  | `src/framework/reannotate.py` | Sidecar de resultados                                                                                                                                              | Existe, no sirve para matriz                                              |
 
-  `reannotate.py` existe pero no implementa este contrato: usa el delimitador
-  por defecto en vez de `;`, abre con `utf-8` en vez de `utf-8-sig`, espera
-  una columna `TC`/`id` en vez de `Campo`, y no maneja nodeids parametrizados
-  `[V<n>]`/`[I<n>]`. Requiere reescritura.
+  `reannotate.py` existe pero no implementa el contrato de matriz: usa el
+  delimitador por defecto en vez de `;`, abre con `utf-8` en vez de
+  `utf-8-sig`, espera una columna `TC`/`id` en vez de `Campo`, y no maneja
+  nodeids parametrizados `[V<n>]`/`[I<n>]`. Su reescritura sigue pendiente —
+  hasta entonces, la anotación del sidecar de cada matriz se hace a mano.
 
-  **Freno duro**: mientras alguno de esos módulos siga pendiente, un change
-  de tipo matriz **no genera código de test**. El proposal se escribe, se
-  declara la dependencia faltante en `Why` y el change se detiene ahí. No se
-  escribe un test que no puede correr, ni se duplica la lógica de parseo
-  dentro del archivo de test para sortear la falta del módulo.
+  **Comprobación condicional**: si en el futuro `matrix.py`, `generators.py`
+  o `mirror.py` dejan de existir o se reescriben de forma incompatible (ej.
+  una refactorización de framework a medio terminar), un change de tipo
+  matriz que dependa de ellos vuelve a declarar la dependencia faltante en
+  `Why` y se detiene ahí — no se duplica la lógica de payload dentro del
+  archivo de test para sortear la falta del módulo.
 
-  Este contrato es deliberadamente **agnóstico de la API de esos módulos**:
-  describe el formato del CSV y las reglas de interpretación, no las firmas.
-  El diseño de las firmas es alcance del change que los implemente.
+  Este contrato es deliberadamente **agnóstico de la API completa de esos
+  módulos** más allá de lo ya fijado: describe el formato del CSV y las
+  reglas de interpretación, no cada firma. Ampliaciones de firma (nuevos
+  generadores, parámetros de `build_payload`) son alcance del change que las
+  necesite, documentadas en su propio `design.md`.
 
   # Hallazgos
 
@@ -531,7 +536,7 @@ rules:
     - "Para changes de tipo matriz: en `What Changes` incluye el inventario de casos — una entrada por fila del CSV con su id derivado (`V<n>`/`I<n>`), el número original de la columna `Campo`, el código HTTP esperado y la `Prioridad`. La prioridad es metadato de implementación: ordena en qué secuencia se escriben y revisan los casos, y no se traduce a markers ni a filtros de ejecución."
     - "Para changes de tipo matriz: en `What Changes` registra el hash SHA-256 del CSV implementado. Si existe un change archivado previo sobre el mismo CSV, compara ambos hashes y declara en `Why` si el CSV se regeneró."
     - "Para changes de tipo matriz: en `What Changes` lista las mirror keys leídas de la sección `## Mirror keys en respuesta` de `docs.md`. Si la sección no existe o todas sus filas dicen `No`, indica explícitamente `Mirror keys: ninguna` — no inventes keys."
-    - "Para changes de tipo matriz: verifica la disponibilidad de los módulos de la sección 'Arquitectura objetivo'. Si `matrix.py`, `generators.py` o `mirror.py` no existen, declara la dependencia faltante en `Why`, escribe el proposal completo y **detén el change ahí** sin generar código de test. No sortees la falta duplicando lógica de parseo dentro del archivo de test."
+    - "Para changes de tipo matriz: verifica la disponibilidad de los módulos de la sección 'Arquitectura objetivo' (`matrix.py`, `generators.py`, `mirror.py`). Si alguno no existe o dejó de ser compatible, declara la dependencia faltante en `Why`, escribe el proposal completo y **detén el change ahí** sin generar código de test. No sortees la falta duplicando lógica de payload dentro del archivo de test."
 
   tasks:
     - "Para changes de tipo TC: cada elemento del bloque `Assert:` del caso AAA se traduce a una tarea independiente. Si el caso tiene 3 asserts, hay al menos 3 tareas de aserción."

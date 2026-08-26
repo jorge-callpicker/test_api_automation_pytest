@@ -56,9 +56,23 @@ def _resolve_name(name: str, tc_id: str, settings: Settings, variables: dict) ->
             )
         return tc_vars[name]
 
+    if name.startswith("MTZ-"):
+        matrix_values = variables.get("matrix_values", {})
+        if name not in matrix_values:
+            raise KeyError(
+                f"Variable '{_braces(name)}' no encontrada en variables.yaml -> matrix_values"
+            )
+        value = matrix_values[name]
+        if isinstance(value, dict) and "generator" in value:
+            from framework.generators import run as run_generator
+
+            params = value.get("params") or {}
+            return run_generator(value["generator"], **params)
+        return value
+
     raise KeyError(
         f"Variable '{_braces(name)}' no tiene un prefijo reconocido "
-        "(se esperaba 'GLB-' o 'TC-XXX-')"
+        "(se esperaba 'GLB-', 'TC-XXX-' o 'MTZ-')"
     )
 
 

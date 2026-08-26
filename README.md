@@ -957,6 +957,66 @@ esperado hoy. Faltan `matrix.py`, `generators.py` y `mirror.py` — ver
 
 ---
 
+## Comandos importantes
+
+**Verificar qué selecciona un patrón `-k` antes de correrlo** (sin ejecutar
+nada):
+
+```bash
+pytest --collect-only
+```
+
+**TC individual** del `.md` AAA:
+
+```bash
+pytest --stepwise -k "TC-001" -v
+```
+
+**Matriz completa**, con reporte HTML + JSON — `-x` es obligatorio (ver
+[Convenciones no negociables](#convenciones-no-negociables)):
+
+```bash
+pytest --stepwise -x -k "matriz_<nombre>" -v \
+    --html=reports/report.html --self-contained-html \
+    --json-report --json-report-file=reports/resultados.json
+```
+
+El patrón `-k` usa **guion bajo**, no el sufijo del CSV con guiones: el
+nombre real de la función parametrizada es `test_matriz_<nombre>`
+(ej. `matriz_create_c1_sin_header`), no `matriz-<nombre>`.
+
+**Diagnóstico sin fail-fast** — ver todos los fallos de una corrida en vez
+de detenerse en el primero, para triage antes de decidir qué corregir:
+
+```bash
+pytest -k "matriz_<nombre>" -v --tb=short \
+    --html=reports/report.html --self-contained-html \
+    --json-report --json-report-file=reports/resultados.json
+```
+
+No sustituye la corrida final con `-x` que decide si el change se archiva.
+
+**Reintentar solo los últimos fallidos**:
+
+```bash
+pytest --last-failed -v
+```
+
+**Reiniciar el cache de `--stepwise`** — ignora qué filas ya pasaron y
+corre la matriz completa de nuevo. Útil tras cambiar datos/variables que
+afectan filas que el cache todavía marca como "passed":
+
+```bash
+pytest --sw-reset -x -k "matriz_<nombre>" -v
+```
+
+**Lint + format antes de commit**:
+
+```bash
+ruff check --fix .
+ruff format .
+```
+
 ## Referencias
 
 - OpenSpec (Fission-AI): https://github.com/Fission-AI/OpenSpec
