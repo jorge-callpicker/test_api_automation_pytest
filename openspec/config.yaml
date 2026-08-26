@@ -430,13 +430,22 @@ context: |
 
   # Reporte y trazabilidad
 
-  Cada ejecución debe generar:
+  Cada ejecución de pytest escribe su propia carpeta bajo `reports/`,
+  nombrada con el timestamp de inicio de esa sesión
+  (`reports/<YYYYMMDD-HHMMSS>/`), en vez de sobrescribir un reporte fijo.
+  Un hook de `pytest_configure` en `tests/conftest.py` resuelve el path
+  solo cuando el QA no pasa `--html`/`--json-report-file` explícitos en el
+  comando. Dentro de esa carpeta:
 
-  - `reports/report.html` — reporte HTML autocontenido (pytest-html).
-  - `reports/resultados.json` — reporte JSON (pytest-json-report).
+  - `report.html` — reporte HTML autocontenido (pytest-html). Cada test
+    ejecutado (`passed`, `failed` o `skipped`) que haya hecho una petición
+    HTTP incluye el cURL de esa petición y el status/headers/body de la
+    respuesta recibida — no solo los casos fallidos.
+  - `resultados.json` — reporte JSON (pytest-json-report).
 
   Los resultados de matriz se anotan en un **sidecar**,
-  `reports/anotado-<nombre>.csv`. El CSV de entrada en
+  `reports/anotado-<nombre>.csv` (fuera de la carpeta por timestamp). El
+  CSV de entrada en
   `inputs/<endpoint>/matriz-<nombre>.csv` **nunca se modifica**: es un
   artefacto generado por otro proyecto, y escribirle encima lo desincroniza
   de su fuente y hace que una regeneración pise las anotaciones.

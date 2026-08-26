@@ -16,7 +16,9 @@ env/
 .cache/
 .hypothesis/
 
-# Reportes generados por corrida — NO versionar
+# Reportes generados por corrida — NO versionar.
+# Cada ejecución de pytest escribe en reports/<timestamp>/, no en la raíz.
+reports/*/
 reports/*.html
 reports/*.json
 reports/*.xml

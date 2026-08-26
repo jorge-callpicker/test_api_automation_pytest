@@ -10,6 +10,7 @@ TIMEOUT_SECONDS = 30.0
 def client(settings: Settings) -> httpx.Client:
     instance = httpx.Client(base_url=settings.GLB_URL_BASE, timeout=TIMEOUT_SECONDS)
     instance.last_request = None
+    instance.last_response = None
 
     def _track_last_request(request: httpx.Request) -> None:
         # request.content de un body multipart/streaming solo es accesible
@@ -19,7 +20,14 @@ def client(settings: Settings) -> httpx.Client:
         request.read()
         instance.last_request = request
 
+    def _track_last_response(response: httpx.Response) -> None:
+        # mismo motivo que en _track_last_request: forzar la lectura aqui
+        # para que el body siga accesible cuando el reporte lo consuma.
+        response.read()
+        instance.last_response = response
+
     instance.event_hooks["request"] = [_track_last_request]
+    instance.event_hooks["response"] = [_track_last_response]
     return instance
 
 

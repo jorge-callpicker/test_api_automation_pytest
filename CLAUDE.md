@@ -191,9 +191,8 @@ pytest --stepwise -x -k "matriz-c2-noauth-text" -v
 pytest --last-failed -v
 
 # Corrida con reportes HTML autocontenido + JSON
-pytest \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+# (cada corrida escribe sola en su propia carpeta reports/<timestamp>/)
+pytest --self-contained-html --json-report
 
 # Lint + format antes de commit
 ruff check --fix .

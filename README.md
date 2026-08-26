@@ -63,7 +63,7 @@ npm install -g @fission-ai/openspec@latest
 ├── tests/                     # Tests por endpoint (creados por change)
 ├── docs/
 │   └── generators-catalog.md  # Autogenerado desde src/framework/generators.py
-├── reports/                   # Reportes HTML/JSON de cada ejecución (git-ignored)
+├── reports/                   # Un subdirectorio <timestamp>/ por ejecución (git-ignored)
 ├── Dockerfile                 # Imagen alternativa a instalar Python local
 ├── .dockerignore              # Exclusiones del build context (secretos, .venv, etc.)
 ├── pyproject.toml             # Dependencias y config de pytest/ruff
@@ -692,9 +692,7 @@ Claude genera `tests/<endpoint>/test_tc_<nnn>.py`.
 ### 4. Ejecuta manualmente
 
 ```bash
-pytest --stepwise -k "TC-001" -v \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+pytest --stepwise -k "TC-001" -v --self-contained-html --json-report
 ```
 
 ### 5. Retroalimenta
@@ -805,9 +803,7 @@ Comando específico de matriz — la bandera `-x` es **obligatoria** para
 fail-fast al primer error:
 
 ```bash
-pytest --stepwise -x -k "matriz-<nombre>" -v \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+pytest --stepwise -x -k "matriz-<nombre>" -v --self-contained-html --json-report
 ```
 
 ### 5. Retroalimenta
@@ -849,7 +845,7 @@ Tras cada corrida:
 ```bash
 python -m framework.reannotate \
     --matrix inputs/<endpoint>/matriz-<nombre>.csv \
-    --results reports/resultados.json
+    --results reports/<timestamp>/resultados.json
 ```
 
 Escribe un **sidecar** en `reports/anotado-<nombre>.csv`. El CSV de
@@ -917,8 +913,9 @@ evidencia, cópialo fuera antes de la siguiente corrida.
 o `.env`, y — si es `TC-XXX-*` — que el `tc_id` del test coincida con
 el prefijo `TC-XXX-` de la variable.
 
-**Test pasa pero la matriz no se reanota**: la corrida requiere los
-flags `--json-report --json-report-file=reports/resultados.json`.
+**Test pasa pero la matriz no se reanota**: la corrida requiere el flag
+`--json-report` (el path de `resultados.json` lo resuelve solo la carpeta
+`reports/<timestamp>/` de esa corrida).
 
 **OpenSpec no reconoce `config.yaml`**: valida sintaxis YAML con
 `python -c "import yaml; yaml.safe_load(open('openspec/config.yaml'))"`.
@@ -976,9 +973,7 @@ pytest --stepwise -k "TC-001" -v
 [Convenciones no negociables](#convenciones-no-negociables)):
 
 ```bash
-pytest --stepwise -x -k "matriz_<nombre>" -v \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+pytest --stepwise -x -k "matriz_<nombre>" -v --self-contained-html --json-report
 ```
 
 El patrón `-k` usa **guion bajo**, no el sufijo del CSV con guiones: el
@@ -989,9 +984,7 @@ nombre real de la función parametrizada es `test_matriz_<nombre>`
 de detenerse en el primero, para triage antes de decidir qué corregir:
 
 ```bash
-pytest -k "matriz_<nombre>" -v --tb=short \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+pytest -k "matriz_<nombre>" -v --tb=short --self-contained-html --json-report
 ```
 
 No sustituye la corrida final con `-x` que decide si el change se archiva.
