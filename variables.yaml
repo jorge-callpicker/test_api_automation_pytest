@@ -22,7 +22,7 @@
 
 globals:
   GLB-account_id_valido: 65
-  GLB-inbox_id_valido: 100
+  GLB-inbox_id_valido: 926
 
   #GLB-url_cp_api: "https://black.digitum.com.mx/chucho/callpicker_api/api_develop"
   GLB-url_cp_api: "https://black.digitum.com.mx/paloma/callpicker_api/api_develop"
@@ -43,15 +43,15 @@ globals:
   # (cuenta inexistente)
   GLB-create-account_id_inexistente: 100
   # (arreglo con UUID inexistente o inactivo)
-  GLB-create-app_id_inactivo: ['de84e961-c95e-41ad-baff-c005d422d7db']
+  GLB-create-app_id_inactivo: ['00000000-0000-4000-8000-000000000001']
   # (arreglo con UUID que no pertenece a la cuenta)
   GLB-create-app_id_otra_cuenta: ['26a51522-cb0b-4293-8d72-cd7d4d578d1d']
   # (arreglo con un único UUID válido de una app existente de la cuenta)
   GLB-create-app_id_valido: ['6cdd7b59-cbc7-4a47-b2c9-52eae306f136']
   # (arreglo con un UUID existente modificando o agregando un carácter del string original)
-  GLB-create-app_id_valido_mutado: ['6cdd7b59-cbc7-4a47-b2c9-52eae306fxxx']  # calculado tras sembrar app_id_valido
+  GLB-create-app_id_valido_mutado: ['6cdd7b59-cbc7-4a47-b2c9-52eae306f137']  # calculado tras sembrar app_id_valido
   # (arreglo con múltiples UUID válidos de apps existentes de la cuenta)
-  GLB-create-apps_ids_validos: ["6cdd7b59-cbc7-4a47-b2c9-52eae306f136", "4514e6cf-7702-4a83-b3bc-add0347ac54e"]
+  GLB-create-apps_ids_validos: ["6cdd7b59-cbc7-4a47-b2c9-52eae306f136", "26a51522-cb0b-4293-8d72-cd7d4d578d1d"]
   # (nombre ya utilizado en una petición anterior)
   GLB-create-name_ya_utilizado: 'wa_prueba_envio'
 
