@@ -117,12 +117,50 @@ CASES = [
 ]
 
 
+# Los tres casos que el rol SuperAdmin no ejecuta (ver design.md decision 4):
+#   I4  -- account_id de una cuenta ajena. SuperAdmin SI alcanza cuentas ajenas,
+#          asi que el endpoint responderia 200 y no el 401 que declara la matriz.
+#          Verificar ese 200 seria probar cruce de cuentas, fuera de alcance.
+#   I64 -- peticion sin header api-access-token.
+#   I65 -- header con token estatico invalido.
+# Los dos ultimos nunca abren sesion: su request es identico byte a byte en
+# cualquier rol, asi que repetirlos no aporta informacion.
+_OMITIDOS_SA = {"I4", "I64", "I65"}
+
+# CASES_SA se deriva de CASES en vez de transcribirse (ver design.md decision 7).
+# La invariante que verifica este change es que las desviaciones de cada fila
+# sean identicas entre roles; derivarlas la vuelve una propiedad estructural del
+# codigo en lugar de algo que hay que confiar que la transcripcion respeto.
+# La numeracion es alineada, no contigua: SA-I<n> designa el mismo caso del CSV
+# que I<n>, y al omitirse I4 el id SA-I4 simplemente no existe (decision 3).
+CASES_SA = [
+    pytest.param(f"SA-{case_id}", expected_status, deviations, id=f"SA-{case_id}")
+    for case_id, expected_status, deviations in (case.values for case in CASES)
+    if case_id not in _OMITIDOS_SA
+]
+
+
 def _resolve_all(deviations: dict) -> dict:
     return {field: resolve(value, tc_id=None) for field, value in deviations.items()}
 
 
-@pytest.mark.parametrize(("case_id", "expected_status", "deviations"), CASES)
-def test_matriz_create_c1_sin_header(settings, http_client, case_id, expected_status, deviations):
+def _ejecutar_caso(
+    role: str,
+    *,
+    settings,
+    http_client,
+    case_id: str,
+    expected_status: int,
+    deviations: dict,
+) -> None:
+    """Ejecuta una fila de la matriz con el rol indicado.
+
+    El cuerpo vive aqui una sola vez para que los dos roles emitan exactamente el
+    mismo request salvo la credencial de sesion: la invariante que verifica el
+    change `add-test-create-matriz-c1-sin-header-super-admin` exige esa identidad
+    estructural, y dos copias del cuerpo no podrian garantizarla (ver design.md
+    decision 2).
+    """
     resolved = _resolve_all(deviations)
     payload = build_payload(BASE_REQUEST, resolved, FIELD_TYPES)
 
@@ -142,6 +180,9 @@ def test_matriz_create_c1_sin_header(settings, http_client, case_id, expected_st
     else:
         session_account_id = glb_account_id_valido
 
+    # I64/I65 no abren sesion: el request es identico byte a byte en cualquier
+    # rol, asi que solo existen en el arreglo del rol base (ver design.md
+    # decision 4). Ningun id `SA-*` alcanza estas dos ramas.
     if case_id == "I64":
         headers = {}
     elif case_id == "I65":
@@ -152,7 +193,7 @@ def test_matriz_create_c1_sin_header(settings, http_client, case_id, expected_st
         }
     else:
         tokens = auth.obtain_session_tokens(
-            "Admin", settings=settings, http_client=http_client, account_id=session_account_id
+            role, settings=settings, http_client=http_client, account_id=session_account_id
         )
         headers = {"api-access-token": tokens.api_access_token}
 
@@ -173,4 +214,38 @@ def test_matriz_create_c1_sin_header(settings, http_client, case_id, expected_st
     check.is_true(es_json, f"{case_id}: la respuesta no es JSON valido: {response.text[:500]!r}")
 
     # docs.md declara "Mirror keys: ninguna" para este endpoint -- no se invoca
-    # framework.mirror.assert_mirror (ver design.md decision 4).
+    # framework.mirror.assert_mirror (ver design.md decision 4 del change de
+    # `Admin`). Aplica igual a los casos de exito de cualquier rol.
+
+
+@pytest.mark.parametrize(("case_id", "expected_status", "deviations"), CASES)
+def test_matriz_create_c1_sin_header(settings, http_client, case_id, expected_status, deviations):
+    _ejecutar_caso(
+        "Admin",
+        settings=settings,
+        http_client=http_client,
+        case_id=case_id,
+        expected_status=expected_status,
+        deviations=deviations,
+    )
+
+
+@pytest.mark.parametrize(("case_id", "expected_status", "deviations"), CASES_SA)
+def test_matriz_create_c1_sin_header_super_admin(
+    settings, http_client, case_id, expected_status, deviations
+):
+    """Misma matriz, rol SuperAdmin.
+
+    Verifica que un rol elevado no relaja ninguna validacion de campo: las 70
+    filas aplicables deben producir el mismo codigo HTTP que con Admin. Los 70
+    casos abren sesion real -- ninguno alcanza las ramas sin sesion del helper,
+    porque I64/I65 estan en `_OMITIDOS_SA`.
+    """
+    _ejecutar_caso(
+        "SuperAdmin",
+        settings=settings,
+        http_client=http_client,
+        case_id=case_id,
+        expected_status=expected_status,
+        deviations=deviations,
+    )

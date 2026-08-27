@@ -45,7 +45,8 @@ globals:
   # (arreglo con UUID inexistente o inactivo)
   GLB-create-app_id_inactivo: ['00000000-0000-4000-8000-000000000001']
   # (arreglo con UUID que no pertenece a la cuenta)
-  GLB-create-app_id_otra_cuenta: ['26a51522-cb0b-4293-8d72-cd7d4d578d1d']
+  #GLB-create-app_id_otra_cuenta: ['26a51522-cb0b-4293-8d72-cd7d4d578d1d']
+  GLB-create-app_id_otra_cuenta: ['016aa59c-7e24-478d-aa21-e17524566ec6']
   # (arreglo con un único UUID válido de una app existente de la cuenta)
   GLB-create-app_id_valido: ['6cdd7b59-cbc7-4a47-b2c9-52eae306f136']
   # (arreglo con un UUID existente modificando o agregando un carácter del string original)

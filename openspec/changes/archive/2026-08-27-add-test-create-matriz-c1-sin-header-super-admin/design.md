@@ -123,6 +123,38 @@ CSV de una sola columna de resultado.
 La limpieza de `reannotate.py` y de las reglas que aún exigen el sidecar es un
 change de framework posterior — ver `proposal.md` → *Non-Goals*.
 
+### Decisión 7 — `CASES_SA` se deriva de `CASES`, no se transcribe
+
+*(Añadida durante la implementación, tras superar la puerta §3.)*
+
+El plan original transcribía los 70 casos como literales. Al ir a escribirlos se
+hizo evidente que el argumento de la decisión 2 —*"dos copias que divergen en el
+primer arreglo"*— aplica con más fuerza a los datos que al cuerpo: son ~35.000
+caracteres de referencias `{{...}}` densas, y un `SA-I30` que difiera de `I30`
+por un carácter no se detecta en revisión.
+
+Como la invariante que este change verifica es precisamente que las desviaciones
+sean idénticas entre roles, derivarlas la convierte en una propiedad estructural
+del código en vez de en algo que hay que confiar que la transcripción respetó:
+
+```python
+_OMITIDOS_SA = {"I4", "I64", "I65"}
+CASES_SA = [
+    pytest.param(f"SA-{cid}", status, deviations, id=f"SA-{cid}")
+    for cid, status, deviations in (c.values for c in CASES)
+    if cid not in _OMITIDOS_SA
+]
+```
+
+Esto **no** contradice la decisión del change archivado de no releer el CSV en
+tiempo de test: `CASES` sigue siendo el literal transcrito una sola vez, y la
+derivación solo lo reusa.
+
+Trade-off aceptado: si algún día un caso de `SuperAdmin` debe diferir a propósito
+del suyo de `Admin` —otro código esperado, otra desviación— hará falta un mapa
+explícito de excepciones. Hoy no existe ninguno: el único caso divergente (`I4`)
+se omite, no se altera.
+
 ## Risks / Trade-offs
 
 **El refactor puede alterar el request del rol `Admin`** → El helper debe
