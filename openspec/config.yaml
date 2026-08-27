@@ -69,7 +69,7 @@ context: |
   | pytest              | 9.1.1    | Runner. `--stepwise`, `--last-failed` y `-x` obligatorios. |
   | pytest-html         | 4.2.0    | Reporte único con `--self-contained-html`.               |
   | pytest-check        | 2.9.1    | Soft assertions. Sin esto los TC se cortan en Assert 1.  |
-  | pytest-json-report  | 1.5.0    | Genera `resultados.json` para reanotar la matriz CSV.    |
+  | pytest-json-report  | 1.5.0    | Genera `resultados.json`: resultado por caso de la corrida. |
   | httpx               | 0.28.1   | Cliente HTTP síncrono. Expone `Request` crudo para cURL. |
   | sqlalchemy          | 2.0.51   | Core (no ORM) para aserciones en BD con AUTOCOMMIT.      |
   | pymysql[rsa]        | 1.2.0    | Driver MySQL/MariaDB en Python puro.                     |
@@ -104,6 +104,28 @@ context: |
   Regla de mapeo env: `{{GLB-token_admin}}` → `GLB_TOKEN_ADMIN` en `.env`
   (guion → underscore, upper). No aplica a `MTZ-*` ni `TC-XXX-*` (siempre
   en `variables.yaml`, nunca en `.env`).
+
+  # El CSV no es dependencia de ejecución
+
+  El CSV es **base de conocimiento de diseño**, no un insumo de runtime. Se
+  consume al escribir el proposal y al generar el código; el test resultante
+  es una **proyección materializada** de esa información:
+
+  - Los casos quedan escritos en el código como argumentos de
+    `pytest.mark.parametrize`, con sus ids `V<n>`/`I<n>` ya derivados.
+  - Los valores quedan en `variables.yaml` (`matrix_values:` / `globals:`) y
+    se consumen con `{{...}}`.
+  - **Ningún test abre `inputs/**/*.csv` durante la corrida.** Un test que
+    dependa del CSV para ejecutarse está mal implementado: se rompe si el
+    archivo se mueve, se regenera o no se distribuye con el código.
+
+  Consecuencia: el CSV y el test pueden divergir. La sincronización es
+  explícita y se controla por el hash SHA-256 registrado en el change (ver
+  "Ingesta de artefactos"), no por lectura en vivo.
+
+  Dónde se materializan exactamente los casos — inline en el archivo de test
+  o en un módulo de datos por endpoint — es decisión del change que los
+  implemente; este contrato solo exige que estén materializados.
 
   # Formato del CSV de matriz
 
@@ -190,8 +212,10 @@ context: |
   `-refinamiento.md` del proyecto generador.
 
   Consecuencia de que la identidad sea posicional: si el CSV se regenera y
-  cambia el número de filas de un grupo, los ids se corren. Las anotaciones
-  de corridas anteriores dejan de ser válidas y hay que volver a ejecutar.
+  cambia el número de filas de un grupo, los ids se corren. Como los ids ya
+  están materializados en el código del test (ver "El CSV no es dependencia
+  de ejecución"), el test queda **desalineado de su fuente**: hay que revisar
+  el change contra el CSV nuevo y volver a ejecutar la matriz completa.
 
   # Construcción de la petición
 
@@ -435,51 +459,57 @@ context: |
   - `reports/report.html` — reporte HTML autocontenido (pytest-html).
   - `reports/resultados.json` — reporte JSON (pytest-json-report).
 
-  Los resultados de matriz se anotan en un **sidecar**,
-  `reports/anotado-<nombre>.csv`. El CSV de entrada en
+  Esos dos archivos son la **única evidencia de la corrida**. No se produce
+  ningún artefacto CSV de resultados, y el CSV de entrada en
   `inputs/<endpoint>/matriz-<nombre>.csv` **nunca se modifica**: es un
   artefacto generado por otro proyecto, y escribirle encima lo desincroniza
-  de su fuente y hace que una regeneración pise las anotaciones.
+  de su fuente.
 
-  El sidecar es el CSV de entrada con dos columnas añadidas al final,
-  `ultimo_resultado` y `ultima_ejecucion` (ISO 8601), escrito preservando el
-  BOM (`utf-8-sig`) para que siga abriéndose bien en Excel. El mapeo:
+  La trazabilidad caso ↔ fila del CSV se lee del propio nodeid, sin archivo
+  intermedio:
 
-  - Nodeids que contengan `TC-XXX` → la fila del CSV con ese TC en su columna
-    de trazabilidad, si la matriz la tiene.
+  - Nodeids que contengan `TC-XXX` → el caso de ese nombre en
+    `casos-prueba.md`.
   - Nodeids parametrizados con `[V1]`, `[V2]`, ..., `[I1]`, `[I2]`, ... → la
-    fila correspondiente **por posición dentro de su grupo**: `V1` es la
-    primera fila con `Código HTTP Esperado < 400`, `I1` la primera con
-    `>= 400`.
+    fila del CSV **por posición dentro de su grupo**: `V1` es la primera fila
+    con `Código HTTP Esperado < 400`, `I1` la primera con `>= 400`.
 
   Como la bandera `-x` es obligatoria en matrices (ver "Ejecución"), una
-  corrida típica solo anota hasta el primer fallo. Las filas que no llegaron
-  a ejecutarse quedan con `ultimo_resultado` vacío, y eso debe distinguirse
-  de un `SKIPPED`.
+  corrida típica solo reporta hasta el primer fallo: los casos posteriores
+  no aparecen como `SKIPPED`, simplemente no se ejecutaron.
 
-  # Arquitectura objetivo — pendiente de implementación
+  # Arquitectura objetivo — módulos pendientes
 
-  La ruta de matriz **no es ejecutable todavía**. El change
-  `add-test-framework-base` quedó archivado incompleto y estos módulos no
-  están disponibles:
+  El change `add-test-framework-base` quedó archivado incompleto. Estado de
+  los módulos que un change de matriz puede necesitar:
 
-  | Módulo                        | Rol                                          | Estado           |
-  |-------------------------------|----------------------------------------------|------------------|
-  | `src/framework/matrix.py`     | Parser del CSV, derivación de ids, metadatos | **No existe**    |
-  | `src/framework/generators.py` | Generadores + CLI `--catalog`                | **No existe**    |
-  | `src/framework/mirror.py`     | Assert de espejo por key JSON exacta         | **No existe**    |
-  | `src/framework/reannotate.py` | Sidecar de resultados                        | Existe, no sirve |
+  | Módulo                        | Rol                                          | Estado        | ¿Bloquea?                          |
+  |-------------------------------|----------------------------------------------|---------------|------------------------------------|
+  | `src/framework/generators.py` | Generadores + CLI `--catalog`                | **No existe** | Sí, si el change usa ruta runtime  |
+  | `src/framework/mirror.py`     | Assert de espejo por key JSON exacta         | **No existe** | Sí, si `docs.md` declara mirror keys |
+  | `src/framework/matrix.py`     | Lectura del CSV como herramienta de autoría  | **No existe** | No                                 |
 
-  `reannotate.py` existe pero no implementa este contrato: usa el delimitador
-  por defecto en vez de `;`, abre con `utf-8` en vez de `utf-8-sig`, espera
-  una columna `TC`/`id` en vez de `Campo`, y no maneja nodeids parametrizados
-  `[V<n>]`/`[I<n>]`. Requiere reescritura.
+  `matrix.py` **no es dependencia de ejecución**: el test no lo importa (ver
+  "El CSV no es dependencia de ejecución"). Es, como máximo, una utilidad
+  offline para leer el CSV al preparar un proposal. Su ausencia no bloquea
+  nada: el modelo lee el CSV directamente al proponer.
 
-  **Freno duro**: mientras alguno de esos módulos siga pendiente, un change
-  de tipo matriz **no genera código de test**. El proposal se escribe, se
-  declara la dependencia faltante en `Why` y el change se detiene ahí. No se
-  escribe un test que no puede correr, ni se duplica la lógica de parseo
-  dentro del archivo de test para sortear la falta del módulo.
+  **Freno duro condicional**: un change de matriz no genera código de test
+  cuando necesita un módulo bloqueante que no existe. El criterio se evalúa
+  change por change:
+
+  - Si alguna celda cae en ruta de resolución runtime y `generators.py` no
+    existe → se detiene.
+  - Si `docs.md` declara al menos una mirror key y `mirror.py` no existe →
+    se detiene.
+  - Si no aplica ninguno de los dos — todos los valores son de resolución
+    estática o sembrada, y no hay mirror keys — el change **sí genera código
+    de test** y sigue el ciclo completo hasta la ejecución del QA.
+
+  Cuando se detiene: el proposal se escribe completo, la dependencia faltante
+  se declara en `Why` y el change para ahí. No se escribe un test que no
+  puede correr, ni se duplica la lógica del módulo faltante dentro del
+  archivo de test para sortear la falta.
 
   Este contrato es deliberadamente **agnóstico de la API de esos módulos**:
   describe el formato del CSV y las reglas de interpretación, no las firmas.
@@ -531,13 +561,14 @@ rules:
     - "Para changes de tipo matriz: en `What Changes` incluye el inventario de casos — una entrada por fila del CSV con su id derivado (`V<n>`/`I<n>`), el número original de la columna `Campo`, el código HTTP esperado y la `Prioridad`. La prioridad es metadato de implementación: ordena en qué secuencia se escriben y revisan los casos, y no se traduce a markers ni a filtros de ejecución."
     - "Para changes de tipo matriz: en `What Changes` registra el hash SHA-256 del CSV implementado. Si existe un change archivado previo sobre el mismo CSV, compara ambos hashes y declara en `Why` si el CSV se regeneró."
     - "Para changes de tipo matriz: en `What Changes` lista las mirror keys leídas de la sección `## Mirror keys en respuesta` de `docs.md`. Si la sección no existe o todas sus filas dicen `No`, indica explícitamente `Mirror keys: ninguna` — no inventes keys."
-    - "Para changes de tipo matriz: verifica la disponibilidad de los módulos de la sección 'Arquitectura objetivo'. Si `matrix.py`, `generators.py` o `mirror.py` no existen, declara la dependencia faltante en `Why`, escribe el proposal completo y **detén el change ahí** sin generar código de test. No sortees la falta duplicando lógica de parseo dentro del archivo de test."
+    - "Para changes de tipo matriz: el CSV es base de conocimiento de diseño, **no dependencia de ejecución**. En `What Changes` declara que los casos se materializan en el código (argumentos de `pytest.mark.parametrize` con sus ids ya derivados) y sus valores en `variables.yaml`. Está prohibido que el test lea `inputs/**/*.csv` en runtime, importe un parser de CSV o reciba la ruta del CSV como parámetro."
+    - "Para changes de tipo matriz: evalúa el freno duro condicional de la sección 'Arquitectura objetivo'. Si alguna celda cae en ruta de resolución runtime y `src/framework/generators.py` no existe, o si `docs.md` declara mirror keys y `src/framework/mirror.py` no existe, declara la dependencia faltante en `Why`, escribe el proposal completo y **detén el change ahí** sin generar código de test. Si no aplica ninguno de los dos casos, el change sí genera código de test y sigue el ciclo completo. La ausencia de `matrix.py` nunca bloquea: el CSV se lee al proponer, no al ejecutar."
 
   tasks:
     - "Para changes de tipo TC: cada elemento del bloque `Assert:` del caso AAA se traduce a una tarea independiente. Si el caso tiene 3 asserts, hay al menos 3 tareas de aserción."
     - "Para changes de tipo TC: ninguna tarea contiene valores literales de negocio (IDs, tokens, URLs, cuerpos de respuesta). Todo se referencia como `{{...}}` y se resuelve vía el cargador de configuración."
     - "En el código generado (TC o matriz), usa `pytest_check.check(...)` para todas las aserciones excepto la primera (status code HTTP), que es `assert` duro."
-    - "Para changes de tipo matriz: primera tarea obligatoria es derivar los ids desde la columna `Código HTTP Esperado`, que cumple el rol de `Resultado`. Cada fila con `< 400` recibe id `V1..Vn`; cada fila con `>= 400` recibe id `I1..In`. Los ids son posicionales dentro de su grupo y se preservan al anotar el sidecar. El test es único (`test_matriz_<nombre>`) con `pytest.mark.parametrize` — nunca un archivo por fila."
+    - "Para changes de tipo matriz: primera tarea obligatoria es derivar los ids desde la columna `Código HTTP Esperado`, que cumple el rol de `Resultado`. Cada fila con `< 400` recibe id `V1..Vn`; cada fila con `>= 400` recibe id `I1..In`. Los ids son posicionales dentro de su grupo y quedan **escritos en el código** como ids de `pytest.mark.parametrize` — no se calculan en runtime leyendo el CSV. El test es único (`test_matriz_<nombre>`) — nunca un archivo por fila."
     - "Para changes de tipo matriz: incluye una tarea de construcción de la petición base del contexto, derivada de `docs.md`, con todos sus valores referenciados como `{{...}}`. Cada caso parametrizado es esa base más la desviación de su fila. La matriz usa exclusivamente las columnas de su propio CSV; para matrices de objeto anidado, la petición padre se declara en `variables.yaml → globals:`."
     - "Para changes de tipo matriz: respeta la semántica de celdas al construir el payload. `(ausente)` significa que la key **no se emite**; `(vacío)` significa key presente con `\"\"`; los campos con `Tipo de Dato` igual a `String (arreglo JSON)` viajan serializados como string, no como arreglo nativo. La coerción según `Tipo de Dato` debe poder no aplicarse en los casos cuyo valor es de tipo incorrecto a propósito."
     - "Para changes de tipo matriz: por cada celda que se materialice, crear una variable `MTZ-<endpoint>-<campo>-<slug_indicacion>` en `variables.yaml → matrix_values:` con el comentario que copia la indicación original del CSV entre paréntesis. El slug se deriva del texto de la celda; el catálogo de abreviaturas (`min`, `max`, `typ`, `outmin`, `outmax`, `type`, `null`, `omit`, `empty`, `regex`, `len_min`, `len_max`, `len_outmin`, `len_outmax`, `wl`, `outwl`) es preferente, no obligatorio, y se usa solo cuando la indicación encaje limpiamente. Los campos anidados se transliteran: `buttons[].type` a `buttons_type`."
@@ -546,7 +577,7 @@ rules:
     - "Para changes de tipo matriz: si añades un generador nuevo a `src/framework/generators.py`, incluye tarea obligatoria de regenerar el catálogo con `python -m framework.generators --catalog > docs/generators-catalog.md`. Nunca editar `docs/generators-catalog.md` a mano."
     - "Para changes de tipo matriz: si `docs.md` declara mirror keys, incluye tarea de ejecutar el assert de espejo **solo en los casos de éxito** (`V1..Vn`, es decir `status < 400`, incluido el `206`). Los casos de error (`I1..In`) no lo ejecutan. La firma concreta la define el change que implemente `src/framework/mirror.py`."
     - "Para changes de tipo matriz: si una corrida revela que el endpoint se comporta distinto a lo que declara la matriz o el `docs.md`, incluye tarea de marcar ese caso con `pytest.mark.xfail(strict=True, reason=...)` citando el id y la discrepancia, y de registrarlo en `inputs/<endpoint-slug>/hallazgos.md`. Nunca ajustes el valor esperado del test para que pase."
-    - "Para changes de tipo matriz: la anotación de resultados produce el sidecar `reports/anotado-<nombre>.csv` y **nunca** modifica el CSV de `inputs/`. Preserva el BOM al escribirlo. Las filas que no llegaron a ejecutarse por el `-x` quedan con `ultimo_resultado` vacío, distinguible de `SKIPPED`."
+    - "Para changes de tipo matriz: no incluyas tareas de anotación de resultados en CSV. La evidencia de la corrida son `reports/report.html` y `reports/resultados.json`; no se produce copia anotada del CSV ni se escribe `PASS`/`FAIL` en ninguna matriz, ni en `inputs/` ni en `reports/`. La trazabilidad caso ↔ fila se lee del nodeid parametrizado `[V<n>]`/`[I<n>]`."
     - "Incluye siempre una tarea final marcada como bloqueante: para TC, `Ejecutar pytest --stepwise -k <TC-ID>`; para matriz, `Ejecutar pytest --stepwise -x -k matriz-<nombre>`. Entregar salida al QA para retroalimentación. El change no se archiva sin retroalimentación humana positiva."
 
   specs:

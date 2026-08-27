@@ -30,7 +30,9 @@ Para cada endpoint bajo prueba, encuentras en `inputs/<endpoint-slug>/`:
 - `matriz-<nombre>.csv` — matriz de particiones y valores límite. Separador
   `;`, UTF-8 **con BOM**, y **fila = caso, columna = campo**. Hay varios por
   endpoint: uno por contexto de aplicación, uno por objeto anidado y uno de
-  validación cruzada. Formato completo en `openspec/config.yaml`.
+  validación cruzada. Formato completo en `openspec/config.yaml`. Es base de
+  conocimiento **de diseño**: se lee al proponer y al generar el código,
+  nunca durante la corrida (ver abajo).
 - `casos-prueba.md` — casos AAA con IDs `TC-XXX`.
 - `hallazgos.md` — discrepancias reales entre el endpoint y la matriz. Se
   crea cuando aparece la primera.
@@ -83,21 +85,48 @@ Comportamientos prohibidos:
 - Editar `docs/generators-catalog.md` a mano. Ese archivo se regenera
   desde los docstrings de `src/framework/generators.py`.
 - Modificar el CSV de `inputs/`. Es un artefacto generado por otro proyecto.
-  Los resultados se anotan en el sidecar `reports/anotado-<nombre>.csv`.
+- Generar una copia anotada del CSV, o escribir `PASS`/`FAIL` en cualquier
+  matriz. La evidencia de la corrida son `reports/report.html` y
+  `reports/resultados.json`, y nada más.
+- Leer el CSV desde el código de test: abrirlo en runtime, importar un
+  parser, o pasar su ruta como parámetro del test (ver abajo).
 - Ajustar el valor esperado de un test para que pase cuando el endpoint
   discrepa de la matriz. Eso es un hallazgo: `xfail(strict=True)` con razón
   y entrada en `inputs/<endpoint-slug>/hallazgos.md`.
-- **Generar código de test de matriz mientras la arquitectura objetivo siga
-  pendiente** (ver abajo).
+- **Generar código de test de matriz cuando el change necesite un módulo
+  bloqueante que no existe** (ver abajo).
 
-### Freno duro — la ruta de matriz no es ejecutable todavía
+### El CSV no es dependencia de ejecución
 
-`src/framework/matrix.py`, `generators.py` y `mirror.py` **no existen**, y
-`reannotate.py` existe pero no implementa el contrato actual. Mientras eso
-siga así, un change de tipo matriz escribe el proposal completo, declara la
-dependencia faltante en `Why` y **se detiene ahí**. No escribas un test que
-no puede correr, ni sortees la falta duplicando la lógica de parseo dentro
-del archivo de test.
+El código de test es una **proyección materializada** del CSV, no un
+consumidor de él. Al generar el test:
+
+- Los casos van escritos en el código como argumentos de
+  `pytest.mark.parametrize`, con los ids `V<n>`/`I<n>` ya derivados.
+- Los valores van en `variables.yaml` y se consumen con `{{...}}`.
+- El test corre sin que el CSV exista en disco.
+
+Si el CSV se regenera, el test queda desalineado de su fuente: se compara el
+hash SHA-256 y se revisa el change. No hay resincronización automática.
+
+### Freno duro condicional — módulos pendientes
+
+`src/framework/generators.py` y `mirror.py` **no existen**. Antes de generar
+código de test de matriz, evalúa si este change los necesita:
+
+- Alguna celda cae en ruta de resolución **runtime** → necesita
+  `generators.py` → **detente**.
+- `docs.md` declara al menos una **mirror key** → necesita `mirror.py` →
+  **detente**.
+- Ninguno de los dos — todos los valores estáticos o sembrados, sin mirror
+  keys → **genera el código** y sigue el ciclo completo.
+
+Al detenerte: proposal completo, dependencia declarada en `Why`, y ahí para.
+No escribas un test que no puede correr ni dupliques la lógica del módulo
+faltante dentro del archivo de test.
+
+`matrix.py` tampoco existe, pero **no bloquea**: el CSV lo lees tú al
+proponer, no el test al ejecutar.
 
 ## Política de resolución de indicaciones entre paréntesis (matrices)
 
@@ -201,12 +230,12 @@ ruff format .
 ```
 
 El `-x` en matriz corta al primer fallo del test parametrizado. Sin `-x`
-el runner continuaría con todas las filas del CSV, saturando el reporte y
+el runner continuaría con todos los casos, saturando el reporte y
 retrasando el feedback al desarrollador. Nunca omitir en matrices.
 
-Consecuencia para la anotación: una corrida típica solo llega hasta el
-primer fallo, así que en el sidecar las filas que no se ejecutaron quedan
-con `ultimo_resultado` vacío — distinto de `SKIPPED`.
+Consecuencia para el reporte: una corrida típica solo llega hasta el primer
+fallo, así que los casos posteriores no aparecen en `resultados.json` — no
+es lo mismo que `SKIPPED`.
 
 Comandos OpenSpec (se escriben en el chat de Claude Code, no en terminal):
 
