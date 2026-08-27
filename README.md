@@ -157,14 +157,12 @@ Y a continuación pega este prompt exactamente:
 
 > **Nota histórica.** Este prompt se ejecutó ya y su change está archivado,
 > pero **quedó incompleto**: los módulos `matrix.py`, `generators.py` y
-> `mirror.py` nunca se crearon, y `reannotate.py` se implementó contra otro
-> contrato. Las especificaciones 8, 9, 10 y 11 de este prompt están
+> `mirror.py` nunca se crearon. Las especificaciones 8, 9 y 10 de este prompt están
 > **superadas** por [Arquitectura pendiente](#arquitectura-pendiente), que
 > refleja el contrato vigente del CSV. En particular, la **8** (parser del
-> CSV consumido por el test) y la **11** (script de reanotación del CSV) ya
-> no aplican: el CSV no es dependencia de ejecución y no se produce ningún
-> artefacto CSV de resultados. Se conserva aquí como registro de lo que se
-> pidió, no como instrucción a re-ejecutar.
+> CSV consumido por el test) ya no aplican: el CSV no es dependencia de ejecución 
+> y no se produce ningún artefacto CSV de resultados. Se conserva aquí como registro 
+> de lo que se pidió, no como instrucción a re-ejecutar.
 
 <details>
 <summary><b>📋 Prompt de bootstrap (clic para expandir)</b></summary>
@@ -212,7 +210,6 @@ Crear:
    src/framework/matrix.py     # parser CSV `;`, transposición, IDs V/I
    src/framework/generators.py # catálogo de generadores + CLI --catalog
    src/framework/mirror.py     # assert de espejo por key JSON exacta
-   src/framework/reannotate.py # script CLI para reanotar la matriz CSV
    tests/__init__.py
    tests/conftest.py           # fixtures compartidos
    docs/                       # carpeta para docs/generators-catalog.md
@@ -308,19 +305,7 @@ Crear:
         f"mirror {key}: request={request_payload[key]} response={response_json[key]}")`.
     - No hace match por substring bajo ninguna circunstancia.
 
-11. `src/framework/reannotate.py` como script CLI:
-    - Uso: `python -m framework.reannotate --matrix <ruta> --results <ruta>`.
-    - Lee `resultados.json` (pytest-json-report) y añade/actualiza en el
-      CSV las columnas o filas de trazabilidad. Mapeo:
-      - Nodeids que contengan `TC-XXX` → columna del CSV con ese TC en la
-        fila de trazabilidad (si aplica).
-      - Nodeids parametrizados de forma `test_matriz_<nombre>[V<n>]` y
-        `[I<n>]` → n-ésima columna del grupo válidos o inválidos del CSV
-        correspondiente (por posición).
-    - Actualiza `ultimo_resultado` (PASSED/FAILED/SKIPPED) y
-      `ultima_ejecucion` (ISO 8601) en cada columna probada.
-
-12. `tests/conftest.py` con fixtures:
+11. `tests/conftest.py` con fixtures:
     - `settings` (scope=session)
     - `http_client` (scope=session, yield con `.close()` al final)
     - `db_conn` (scope=function, con `.close()` al final)
@@ -332,12 +317,12 @@ Crear:
       del cliente) y detalles de las aserciones de pytest-check que
       fallaron.
 
-13. Sección `[tool.ruff]` en pyproject.toml con:
+12. Sección `[tool.ruff]` en pyproject.toml con:
     - line-length = 100
     - target-version = "py311"
     - lint.select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 
-14. Un smoke test opcional `tests/test_smoke.py` que:
+13. Un smoke test opcional `tests/test_smoke.py` que:
     - Verifica que `Settings()` carga sin excepción (leyendo `.env`).
     - Verifica que `load_variables()` retorna un dict con las tres
       secciones `globals`, `test_cases` y `matrix_values`.
@@ -347,7 +332,7 @@ Crear:
     - NO hace request HTTP ni consulta a BD.
     - Marcado con `@pytest.mark.tc("SMOKE-001")`.
 
-15. Al finalizar la implementación, ejecutar como parte del change:
+14. Al finalizar la implementación, ejecutar como parte del change:
     `python -m framework.generators --catalog > docs/generators-catalog.md`
     y committear el archivo generado.
 
