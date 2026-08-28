@@ -675,10 +675,11 @@ Claude genera `tests/<endpoint>/test_tc_<nnn>.py`.
 ### 4. Ejecuta manualmente
 
 ```bash
-pytest --stepwise -k "TC-001" -v \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+pytest --stepwise -k "TC-001" -v --self-contained-html --json-report
 ```
+
+Cada corrida escribe en una carpeta nueva `reports/<YYYYMMDD_HHMMSS>/`
+(`report.html` + `resultados.json`); no hace falta indicar rutas.
 
 ### 5. Retroalimenta
 
@@ -790,10 +791,11 @@ Comando específico de matriz — la bandera `-x` es **obligatoria** para
 fail-fast al primer error:
 
 ```bash
-pytest --stepwise -x -k "matriz-<nombre>" -v \
-    --html=reports/report.html --self-contained-html \
-    --json-report --json-report-file=reports/resultados.json
+pytest --stepwise -x -k "matriz-<nombre>" -v --self-contained-html --json-report
 ```
+
+Cada corrida escribe en una carpeta nueva `reports/<YYYYMMDD_HHMMSS>/`
+(`report.html` + `resultados.json`); no hace falta indicar rutas.
 
 ### 5. Retroalimenta
 
@@ -831,9 +833,14 @@ git commit -m "test(<endpoint>): implementa matriz-<nombre>"
 
 La evidencia son los dos reportes que produce pytest, y nada más:
 
-- `reports/report.html` — reporte HTML autocontenido, con el cURL de la
-  request y el detalle de las soft assertions que fallaron.
-- `reports/resultados.json` — resultado por caso, para consumo programático.
+- `reports/<YYYYMMDD_HHMMSS>/report.html` — reporte HTML autocontenido.
+  Todo caso que haya realizado una petición HTTP incluye el cURL de la
+  última request y el status code + body completo de la última
+  respuesta, sin redactar ni truncar — tanto en éxito (`passed`) como en
+  fallo (`failed`). Los casos fallidos además muestran el detalle de las
+  soft assertions que fallaron.
+- `reports/<YYYYMMDD_HHMMSS>/resultados.json` — resultado por caso, para
+  consumo programático.
 
 **No se anota ningún CSV.** El CSV de `inputs/` no se modifica ni se copia
 para marcarlo con `PASS`/`FAIL`: los reportes ya cubren esa función, y el
@@ -850,9 +857,10 @@ intermedio:
 Como `-x` corta al primer fallo, los casos posteriores no aparecen en el
 reporte. Eso **no** es lo mismo que `SKIPPED`.
 
-Los reportes viven en `reports/` (git-ignored) y se sobrescriben en cada
-corrida. Si quieres conservar uno como evidencia, cópialo fuera antes de la
-siguiente.
+Los reportes viven en `reports/` (git-ignored). Cada corrida crea su propia
+carpeta `reports/<YYYYMMDD_HHMMSS>/`, así que no se sobrescriben entre sí —
+las de corridas anteriores quedan disponibles como evidencia sin necesidad
+de copiarlas a mano.
 
 ---
 
@@ -895,8 +903,9 @@ siguiente.
 o `.env`, y — si es `TC-XXX-*` — que el `tc_id` del test coincida con
 el prefijo `TC-XXX-` de la variable.
 
-**No se generó `reports/resultados.json`**: la corrida requiere los flags
-`--json-report --json-report-file=reports/resultados.json`.
+**No se generó `resultados.json`**: la corrida requiere el flag
+`--json-report`; el archivo aparece en la carpeta
+`reports/<YYYYMMDD_HHMMSS>/` de esa ejecución.
 
 **OpenSpec no reconoce `config.yaml`**: valida sintaxis YAML con
 `python -c "import yaml; yaml.safe_load(open('openspec/config.yaml'))"`.
@@ -940,6 +949,64 @@ materializados en el código. Es un bug del test, no del ambiente.
 `python -m framework.generators --catalog > docs/generators-catalog.md`.
 
 ---
+
+## Comandos importantes
+
+**Verificar qué selecciona un patrón `-k` antes de correrlo** (sin ejecutar
+nada):
+
+```bash
+pytest --collect-only
+```
+
+**TC individual** del `.md` AAA:
+
+```bash
+pytest --stepwise -k "TC-001" -v
+```
+
+**Matriz completa**, con reporte HTML + JSON — `-x` es obligatorio (ver
+[Convenciones no negociables](#convenciones-no-negociables)):
+
+```bash
+pytest --stepwise -x -k "matriz_<nombre>" -v --self-contained-html --json-report
+```
+
+El patrón `-k` usa **guion bajo**, no el sufijo del CSV con guiones: el
+nombre real de la función parametrizada es `test_matriz_<nombre>`
+(ej. `matriz_create_c1_sin_header`), no `matriz-<nombre>`.
+
+**Diagnóstico sin fail-fast** — ver todos los fallos de una corrida en vez
+de detenerse en el primero, para triage antes de decidir qué corregir:
+
+```bash
+pytest -k "matriz_<nombre>" -v --tb=short --self-contained-html --json-report
+```
+
+No sustituye la corrida final con `-x` que decide si el change se archiva.
+
+**Reintentar solo los últimos fallidos**:
+
+```bash
+pytest --last-failed -v
+```
+
+**Reiniciar el cache de `--stepwise`** — ignora qué filas ya pasaron y
+corre la matriz completa de nuevo. Útil tras cambiar datos/variables que
+afectan filas que el cache todavía marca como "passed":
+
+```bash
+pytest --sw-reset -x -k "matriz_<nombre>" -v
+```
+
+**Lint + format antes de commit**:
+
+```bash
+ruff check --fix .
+ruff format .
+```
+
+
 
 ## Referencias
 
