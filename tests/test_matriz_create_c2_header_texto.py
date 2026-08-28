@@ -388,19 +388,42 @@ def _resolve_all(deviations: dict) -> dict:
     return {field: resolve(value, tc_id=None) for field, value in deviations.items()}
 
 
-@pytest.mark.parametrize(("case_id", "expected_status", "deviations"), CASES)
-def test_matriz_create_c2_header_texto(settings, http_client, case_id, expected_status, deviations):
-    """Contexto c2-header-texto: type=TEXT con header/header_var.
+# CASES_SA se deriva de CASES en vez de transcribirse (mismo patron que
+# tests/test_matriz_create_c1_sin_header.py, decision 7 de su design.md). A
+# diferencia de c1, ninguna fila se omite: c2-header-texto no rompe la
+# autenticacion en ninguna de sus 18 filas y todas usan el mismo account_id
+# (MTZ-create-account_id-minimo_del_rango = 65 = GLB-account_id_valido), asi
+# que no hay caso analogo al cruce de cuentas de I4 en c1. La numeracion queda
+# alineada y sin huecos: SA-V1..SA-V7, SA-I1..SA-I11.
+CASES_SA = [
+    pytest.param(f"SA-{case_id}", expected_status, deviations, id=f"SA-{case_id}")
+    for case_id, expected_status, deviations in (case.values for case in CASES)
+]
 
-    A diferencia de c1-sin-header, ninguna fila de este CSV rompe la
-    autenticacion -- las 18 abren sesion real contra GLB-account_id_valido
-    con el rol Admin (ver proposal.md, "Alcance de rol").
+
+def _ejecutar_caso(
+    role: str,
+    *,
+    settings,
+    http_client,
+    case_id: str,
+    expected_status: int,
+    deviations: dict,
+) -> None:
+    """Ejecuta una fila de la matriz con el rol indicado.
+
+    El cuerpo vive aqui una sola vez para que los dos roles emitan exactamente
+    el mismo request salvo la credencial de sesion -- mismo patron que
+    tests/test_matriz_create_c1_sin_header.py. A diferencia de c1, no hace
+    falta logica de fallback de cuenta de sesion ni ramas sin sesion: las 18
+    filas de este CSV ya resuelven account_id al mismo valor y ninguna omite
+    el header api-access-token.
     """
     resolved = _resolve_all(deviations)
     payload = build_payload(BASE_REQUEST, resolved, FIELD_TYPES)
 
     tokens = auth.obtain_session_tokens(
-        "Admin", settings=settings, http_client=http_client, account_id=resolved["account_id"]
+        role, settings=settings, http_client=http_client, account_id=resolved["account_id"]
     )
     headers = {"api-access-token": tokens.api_access_token}
 
@@ -421,4 +444,43 @@ def test_matriz_create_c2_header_texto(settings, http_client, case_id, expected_
     check.is_true(es_json, f"{case_id}: la respuesta no es JSON valido: {response.text[:500]!r}")
 
     # docs.md declara "Mirror keys: ninguna" para este endpoint -- no se invoca
-    # framework.mirror.assert_mirror.
+    # framework.mirror.assert_mirror. Aplica igual a los casos de exito de
+    # cualquier rol.
+
+
+@pytest.mark.parametrize(("case_id", "expected_status", "deviations"), CASES)
+def test_matriz_create_c2_header_texto(settings, http_client, case_id, expected_status, deviations):
+    """Contexto c2-header-texto: type=TEXT con header/header_var.
+
+    A diferencia de c1-sin-header, ninguna fila de este CSV rompe la
+    autenticacion -- las 18 abren sesion real contra GLB-account_id_valido
+    con el rol Admin (ver proposal.md, "Alcance de rol").
+    """
+    _ejecutar_caso(
+        "Admin",
+        settings=settings,
+        http_client=http_client,
+        case_id=case_id,
+        expected_status=expected_status,
+        deviations=deviations,
+    )
+
+
+@pytest.mark.parametrize(("case_id", "expected_status", "deviations"), CASES_SA)
+def test_matriz_create_c2_header_texto_super_admin(
+    settings, http_client, case_id, expected_status, deviations
+):
+    """Misma matriz, rol SuperAdmin.
+
+    Verifica que un rol elevado no relaja ninguna validacion de campo: las 18
+    filas producen el mismo codigo HTTP que con Admin. Cero casos omitidos
+    (ver proposal.md, "Cero omisiones").
+    """
+    _ejecutar_caso(
+        "SuperAdmin",
+        settings=settings,
+        http_client=http_client,
+        case_id=case_id,
+        expected_status=expected_status,
+        deviations=deviations,
+    )
