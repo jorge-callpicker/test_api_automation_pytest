@@ -14,10 +14,11 @@ Cada endpoint se cubre con dos tipos de change proposal independientes:
 La disciplina completa vive en `openspec/config.yaml`. Este README
 describe cómo **operar** el repo día a día.
 
-> **Estado actual — la ruta de matriz no es ejecutable todavía.** Faltan
-> `src/framework/matrix.py`, `generators.py` y `mirror.py`, y
-> `reannotate.py` necesita reescritura. Un change de matriz se puede
-> proponer, pero se detiene antes de generar código. Ver
+> **Estado actual — la ruta de matriz es ejecutable con condiciones.**
+> Faltan `src/framework/generators.py` y `mirror.py`. Un change de matriz
+> que los necesite (valores de resolución runtime, o mirror keys declaradas
+> en `docs.md`) se detiene tras el proposal; uno que no los necesite corre
+> el ciclo completo. Ver
 > [Arquitectura pendiente](#arquitectura-pendiente).
 
 ---
@@ -159,8 +160,11 @@ Y a continuación pega este prompt exactamente:
 > `mirror.py` nunca se crearon, y `reannotate.py` se implementó contra otro
 > contrato. Las especificaciones 8, 9, 10 y 11 de este prompt están
 > **superadas** por [Arquitectura pendiente](#arquitectura-pendiente), que
-> refleja el contrato vigente del CSV. Se conserva aquí como registro de lo
-> que se pidió, no como instrucción a re-ejecutar.
+> refleja el contrato vigente del CSV. En particular, la **8** (parser del
+> CSV consumido por el test) y la **11** (script de reanotación del CSV) ya
+> no aplican: el CSV no es dependencia de ejecución y no se produce ningún
+> artefacto CSV de resultados. Se conserva aquí como registro de lo que se
+> pidió, no como instrucción a re-ejecutar.
 
 <details>
 <summary><b>📋 Prompt de bootstrap (clic para expandir)</b></summary>
@@ -451,8 +455,8 @@ pytest --last-failed -v
 ruff check --fix . && ruff format .
 ```
 
-Los reportes y la matriz reanotada quedan en tu host al salir del
-contenedor, porque son el mismo archivo (bind mount), no una copia.
+Los reportes quedan en tu host al salir del contenedor, porque son el mismo
+archivo (bind mount), no una copia.
 
 ### 4. Sal del contenedor
 
@@ -467,42 +471,42 @@ la próxima vez.
 
 ## Arquitectura pendiente
 
-La ruta de TC individual funciona. **La ruta de matriz no.** Estado real de
-`src/framework/`:
+La ruta de TC individual funciona. La ruta de matriz funciona **con
+condiciones**. Estado real de `src/framework/`:
 
-| Módulo           | Rol                                          | Estado           |
-|------------------|----------------------------------------------|------------------|
-| `config.py`      | pydantic-settings + loader YAML              | Existe           |
-| `variables.py`   | Interpolación `{{...}}`                      | Existe           |
-| `http.py`        | Cliente httpx + generador de cURL            | Existe           |
-| `db.py`          | Engine SQLAlchemy con AUTOCOMMIT             | Existe           |
-| `matrix.py`      | Parser del CSV, derivación de ids, metadatos | **No existe**    |
-| `generators.py`  | Generadores + CLI `--catalog`                | **No existe**    |
-| `mirror.py`      | Assert de espejo por key JSON exacta         | **No existe**    |
-| `reannotate.py`  | Sidecar de resultados                        | Existe, no sirve |
+| Módulo           | Rol                                          | Estado        | ¿Bloquea la matriz?                    |
+|------------------|----------------------------------------------|---------------|----------------------------------------|
+| `config.py`      | pydantic-settings + loader YAML              | Existe        | —                                      |
+| `variables.py`   | Interpolación `{{...}}`                      | Existe        | —                                      |
+| `http.py`        | Cliente httpx + generador de cURL            | Existe        | —                                      |
+| `db.py`          | Engine SQLAlchemy con AUTOCOMMIT             | Existe        | —                                      |
+| `generators.py`  | Generadores + CLI `--catalog`                | **No existe** | Sí, si el change usa ruta runtime      |
+| `mirror.py`      | Assert de espejo por key JSON exacta         | **No existe** | Sí, si `docs.md` declara mirror keys   |
 
-`reannotate.py` no implementa el contrato vigente: usa el delimitador por
-defecto en vez de `;`, abre con `utf-8` en vez de `utf-8-sig` (los CSV traen
-BOM), espera una columna `TC`/`id` en vez de `Campo`, y no maneja nodeids
-parametrizados `[V<n>]`/`[I<n>]`. Requiere reescritura, no parche.
+### El CSV no es dependencia de ejecución
 
-**Consecuencia operativa**: un change de tipo matriz se puede proponer, pero
-Claude lo detiene tras el proposal declarando la dependencia faltante. No
-generará un test que no puede correr.
+El CSV es base de conocimiento **de diseño**. El test que se genera es una
+proyección materializada de él: los casos quedan escritos como argumentos de
+`pytest.mark.parametrize` con sus ids `V<n>`/`I<n>` ya derivados, y los
+valores en `variables.yaml`. **El test corre sin que el CSV exista en
+disco**, y ningún módulo del framework lo abre en runtime.
+
+Por eso no hay un `matrix.py` bloqueante: leer el CSV es trabajo del modelo
+al escribir el proposal, no del test al ejecutarse. Si en el futuro se
+implementa un lector de CSV, será una utilidad **offline** de autoría.
+
+El precio es que CSV y test pueden divergir. La sincronización se controla
+por el hash SHA-256 registrado en el change (ver
+[Cuando el generador emite una versión nueva del CSV](#cuando-el-generador-emite-una-versión-nueva-del-csv)).
+
+**Consecuencia operativa**: un change de matriz que resuelva todos sus
+valores de forma estática o sembrada y cuyo endpoint no declare mirror keys
+llega hasta la ejecución. Si necesita `generators.py` o `mirror.py`, Claude
+lo detiene tras el proposal declarando la dependencia faltante.
 
 ### Contrato que deben cumplir los módulos faltantes
 
 Resumen; la especificación normativa está en `openspec/config.yaml`.
-
-**`matrix.py`** — lee el CSV con `encoding="utf-8-sig"` y `delimiter=";"`.
-Valida que la columna 1 sea `Campo`, la penúltima `Código HTTP Esperado` y
-la última `Prioridad`. Consume las tres filas de metadatos (`¿Requerido?`,
-`Tipo Validación`, `Tipo de Dato`) y las expone por campo. Deriva los ids:
-`Código HTTP Esperado < 400` → `V1..Vn` (incluye `206`), `>= 400` →
-`I1..In`, posicionales dentro de su grupo. Extrae el sufijo
-`N (cruzada: campoA+campoB)` de las filas cruzadas. Expone un sentinela para
-campo ausente, distinto de `None`. Entrega `(argnames, argvalues, ids)` para
-`pytest.mark.parametrize`.
 
 **`generators.py`** — al set inicial de 11 hay que añadir los que las
 matrices reales exigen: string único no usado antes, texto con N variables
@@ -513,12 +517,6 @@ con `python -m framework.generators --catalog`; nunca a mano.
 
 **`mirror.py`** — assert de espejo por key JSON exacta, nunca por substring,
 solo en casos con `status < 400`, cada key con `pytest_check.check`.
-
-**`reannotate.py`** — produce el sidecar `reports/anotado-<nombre>.csv`,
-preservando el BOM. **Nunca modifica el CSV de `inputs/`.** Mapea nodeids
-`[V<n>]`/`[I<n>]` a la fila correspondiente por posición dentro de su grupo.
-Las filas que el `-x` impidió ejecutar quedan con `ultimo_resultado` vacío,
-distinguible de `SKIPPED`.
 
 La API concreta de estos módulos **no está fijada** por el contrato: se
 diseña en el change que los implemente.
@@ -588,9 +586,9 @@ sha256sum inputs/<endpoint-slug>/matriz-<nombre>.csv
 ```
 
 Si difiere del registrado en el change archivado, el CSV se regeneró. Como la
-identidad de los casos es **posicional**, los ids `V<n>`/`I<n>` pueden
-haberse corrido: las anotaciones anteriores dejan de ser válidas y hay que
-volver a ejecutar la matriz completa.
+identidad de los casos es **posicional** y los ids ya están escritos en el
+test, el test queda desalineado de su fuente: hay que revisar el change
+contra el CSV nuevo y volver a ejecutar la matriz completa.
 
 ---
 
@@ -721,10 +719,12 @@ git commit -m "test(<endpoint>): implementa TC-XXX"
 Todos los casos de una matriz CSV se implementan en un solo change
 proposal como un único test parametrizado. En el chat de Claude Code:
 
-> **Hoy este flujo se detiene en el paso 2.** Faltan `matrix.py`,
-> `generators.py` y `mirror.py` — ver [Arquitectura pendiente](#arquitectura-pendiente).
-> El proposal se genera y sirve como inventario revisable, pero
-> `/opsx:apply` no producirá código de test hasta que esos módulos existan.
+> **Hoy este flujo puede detenerse en el paso 2.** Faltan `generators.py` y
+> `mirror.py` — ver [Arquitectura pendiente](#arquitectura-pendiente). Si la
+> matriz necesita alguno (valores de resolución runtime, o mirror keys en
+> `docs.md`), el proposal se genera como inventario revisable pero
+> `/opsx:apply` no producirá código. Si no los necesita, el flujo completo
+> corre normal.
 
 ### 1. Propose
 
@@ -838,9 +838,9 @@ git commit -m "test(<endpoint>): implementa matriz-<nombre>"
 
 ---
 
-## Anotar los resultados de la matriz
+## Evidencia de la corrida
 
-Tras cada corrida:
+La evidencia son los dos reportes que produce pytest, y nada más:
 
 ```bash
 python -m framework.reannotate \
@@ -848,30 +848,24 @@ python -m framework.reannotate \
     --results reports/<timestamp>/resultados.json
 ```
 
-Escribe un **sidecar** en `reports/anotado-<nombre>.csv`. El CSV de
-`inputs/` **nunca se modifica**: es un artefacto generado por otro proyecto,
-y escribirle encima lo desincroniza de su fuente, además de que una
-regeneración pisaría las anotaciones.
+**No se anota ningún CSV.** El CSV de `inputs/` no se modifica ni se copia
+para marcarlo con `PASS`/`FAIL`: los reportes ya cubren esa función, y el
+CSV es un artefacto generado por otro proyecto.
 
-El sidecar es el CSV de entrada con dos columnas añadidas al final,
-`ultimo_resultado` y `ultima_ejecucion` (ISO 8601), preservando el BOM. El
-mapeo:
+La trazabilidad caso ↔ fila del CSV se lee del propio nodeid, sin archivo
+intermedio:
 
-- Nodeids con `TC-XXX` → la fila del CSV con ese TC (si la matriz tiene
-  columna de trazabilidad a TC).
-- Nodeids parametrizados `test_matriz_<nombre>[V<n>]` → n-ésima fila con
+- `test_matriz_<nombre>[V<n>]` → n-ésima fila con
   `Código HTTP Esperado < 400`.
-- Nodeids parametrizados `test_matriz_<nombre>[I<n>]` → n-ésima fila con
+- `test_matriz_<nombre>[I<n>]` → n-ésima fila con
   `Código HTTP Esperado >= 400`.
 
-Como `-x` corta al primer fallo, las filas que no se ejecutaron quedan con
-`ultimo_resultado` vacío. Eso **no** es lo mismo que `SKIPPED`.
+Como `-x` corta al primer fallo, los casos posteriores no aparecen en el
+reporte. Eso **no** es lo mismo que `SKIPPED`.
 
-Los sidecar viven en `reports/` (git-ignored). Si quieres conservar uno como
-evidencia, cópialo fuera antes de la siguiente corrida.
-
-> Este comando todavía no funciona: `reannotate.py` está escrito contra otro
-> contrato. Ver [Arquitectura pendiente](#arquitectura-pendiente).
+Los reportes viven en `reports/` (git-ignored) y se sobrescriben en cada
+corrida. Si quieres conservar uno como evidencia, cópialo fuera antes de la
+siguiente.
 
 ---
 
@@ -888,8 +882,9 @@ evidencia, cópialo fuera antes de la siguiente corrida.
   duro.
 - **BD**: SQLAlchemy Core con AUTOCOMMIT. No transacciones desde tests.
 - **Matriz siempre con `-x`**. Sin excepción.
-- **El CSV de `inputs/` nunca se modifica.** Los resultados van al sidecar
-  en `reports/`.
+- **El CSV de `inputs/` nunca se modifica ni se lee en ejecución.** Es base
+  de conocimiento de diseño; el test es una proyección materializada de él.
+  Los resultados de la corrida viven solo en `reports/`.
 - **Assert de espejo solo por key JSON exacta**, sin substring matching, y
   solo en casos con `status < 400` (incluye el `206`).
 - **`(ausente)` no es `null`.** `(ausente)` omite la key; `(vacío)` la emite
@@ -936,17 +931,23 @@ vienen en UTF-8 **con BOM**.
 campo es de tipo `String (arreglo JSON)`. Esos viajan serializados como
 string (`"apps": "[\"uuid\"]"`), no como arreglo nativo.
 
-**Los ids `V<n>`/`I<n>` no coinciden con los del sidecar anterior**: el CSV
+**Los ids `V<n>`/`I<n>` del test no coinciden con las filas del CSV**: el CSV
 se regeneró y la identidad es posicional. Compara el hash contra el del
-change archivado y vuelve a correr la matriz completa.
+change archivado, revisa el change contra el CSV nuevo y vuelve a correr la
+matriz completa.
 
 **Alguna celda del CSV trae `<campo>.<id> | <valor>`**: el archivo no pasó
 la fase de limpieza del proyecto generador. Devuélvelo para limpiar; no lo
 consumas así.
 
-**Un change de matriz se detiene tras el proposal**: es el comportamiento
-esperado hoy. Faltan `matrix.py`, `generators.py` y `mirror.py` — ver
-[Arquitectura pendiente](#arquitectura-pendiente).
+**Un change de matriz se detiene tras el proposal**: la matriz necesita
+`generators.py` (tiene valores de resolución runtime) o `mirror.py` (su
+`docs.md` declara mirror keys), y ninguno existe todavía. El `Why` del
+proposal dice cuál. Ver [Arquitectura pendiente](#arquitectura-pendiente).
+
+**Un test de matriz falla con `FileNotFoundError` sobre un `.csv`**: está mal
+implementado. El CSV no es dependencia de ejecución — los casos deben estar
+materializados en el código. Es un bug del test, no del ambiente.
 
 **Generador nuevo no aparece en el catálogo**: no se regeneró
 `docs/generators-catalog.md`. Ejecuta manualmente:
