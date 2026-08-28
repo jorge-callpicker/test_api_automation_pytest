@@ -17,10 +17,9 @@ env/
 .hypothesis/
 
 # Reportes generados por corrida — NO versionar
-reports/*.html
-reports/*.json
-reports/*.xml
-reports/assets/
+# Cada corrida crea reports/<YYYYMMDD_HHMMSS>/ con su propio report.html
+# y resultados.json; se ignora la carpeta completa.
+reports/
 
 # Cobertura
 .coverage
