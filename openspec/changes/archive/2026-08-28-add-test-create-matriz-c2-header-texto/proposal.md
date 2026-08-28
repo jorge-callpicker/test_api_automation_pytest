@@ -88,21 +88,25 @@ primera implementación.
   | `MTZ-create-header-contiene_dos_o_mas_variables` | (contiene dos o más variables) | I6 |
   | `MTZ-create-header-texto_tipico_con_variable` | (texto típico de longitud media, con una única variable {{1}}) | I7 |
 
-- Declara **11 variables `MTZ-create-header_var-*` nuevas**:
+- Declara **10 variables `MTZ-create-header_var-*` nuevas**, y **reutiliza 1
+  ya existente**: `MTZ-create-header_var-ausente` fue declarada por
+  `c1-sin-header` pero nunca consumida por su código (que fija
+  `header_var: OMIT` directo en `BASE_REQUEST`, sin pasar por
+  `{{...}}`). Este change es su primer consumidor real, vía `V1`/`V3`.
 
-  | Variable | Indicación original | Casos |
-  |---|---|---|
-  | `MTZ-create-header_var-ausente` | (ausente) | V1, V3 |
-  | `MTZ-create-header_var-longitud_minima` | (longitud mínima, 1 carácter) | V2 |
-  | `MTZ-create-header_var-longitud_maxima` | (longitud máxima, 60 caracteres) | V4 |
-  | `MTZ-create-header_var-cadena_que_alterna_entre_mayusculas_y` | (cadena que alterna entre mayúsculas y minúsculas) | V5 |
-  | `MTZ-create-header_var-caracteres_especiales` | (caracteres especiales) | V6 |
-  | `MTZ-create-header_var-valor_tipico_correspondiente_a_la_variable` | (valor típico correspondiente a la variable del header) | V7, I1–I6 |
-  | `MTZ-create-header_var-ausente_cuando_header_contiene_variable` | (ausente cuando header contiene variable) | I7 |
-  | `MTZ-create-header_var-vacio` | (vacío) | I8 |
-  | `MTZ-create-header_var-longitud_61` | (longitud 61, por encima del máximo) | I9 |
-  | `MTZ-create-header_var-contiene_salto_de_linea` | (contiene salto de línea) | I10 |
-  | `MTZ-create-header_var-contiene_4_o_mas_espacios` | (contiene 4 o más espacios consecutivos) | I11 |
+  | Variable | Indicación original | Casos | Estado |
+  |---|---|---|---|
+  | `MTZ-create-header_var-ausente` | (ausente) | V1, V3 | ya existía |
+  | `MTZ-create-header_var-longitud_minima` | (longitud mínima, 1 carácter) | V2 | nueva |
+  | `MTZ-create-header_var-longitud_maxima` | (longitud máxima, 60 caracteres) | V4 | nueva |
+  | `MTZ-create-header_var-cadena_que_alterna_entre_mayusculas_y` | (cadena que alterna entre mayúsculas y minúsculas) | V5 | nueva |
+  | `MTZ-create-header_var-caracteres_especiales` | (caracteres especiales) | V6 | nueva |
+  | `MTZ-create-header_var-valor_tipico_correspondiente_a_la_variable` | (valor típico correspondiente a la variable del header) | V7, I1–I6 | nueva |
+  | `MTZ-create-header_var-ausente_cuando_header_contiene_variable` | (ausente cuando header contiene variable) | I7 | nueva |
+  | `MTZ-create-header_var-vacio` | (vacío) | I8 | nueva |
+  | `MTZ-create-header_var-longitud_61` | (longitud 61, por encima del máximo) | I9 | nueva |
+  | `MTZ-create-header_var-contiene_salto_de_linea` | (contiene salto de línea) | I10 | nueva |
+  | `MTZ-create-header_var-contiene_4_o_mas_espacios` | (contiene 4 o más espacios consecutivos) | I11 | nueva |
 
 - **Cero variables `GLB-create-*` nuevas** y **cero generadores nuevos**:
   las 18 filas reutilizan sin cambio `MTZ-create-account_id-minimo_del_rango`,
@@ -166,8 +170,10 @@ implementa — las 18 filas van en el mismo test parametrizado.
 - **Código nuevo**: `tests/test_matriz_create_c2_header_texto.py`. Sin
   cambios en `src/framework/` — reutiliza `matrix.py`, `auth.py`,
   `generators.py`, `http.py` y `variables.py` tal como están.
-- `variables.yaml` — 25 entradas nuevas en `matrix_values:` (1 de `type`,
-  13 de `header`, 11 de `header_var`). Cero entradas nuevas en `globals:`.
+- `variables.yaml` — 24 entradas nuevas en `matrix_values:` (1 de `type`,
+  13 de `header`, 10 de `header_var`), más la reutilización de
+  `MTZ-create-header_var-ausente` (ya existía, sin consumidor hasta ahora).
+  Cero entradas nuevas en `globals:`.
 - `inputs/Create/create-matriz-c2-header-texto.csv` — fuente de este
   change, sin modificar por parte de este proposal (ya llegó corregido por
   el QA antes de proponer).

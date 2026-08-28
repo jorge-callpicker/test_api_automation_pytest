@@ -803,14 +803,17 @@ Comando específico de matriz — la bandera `-x` es **obligatoria** para
 fail-fast al primer error:
 
 ```bash
-pytest --stepwise -x -k "matriz-<nombre>" -v --self-contained-html --json-report
+pytest --stepwise -x -k "matriz_<endpoint>_<nombre>" -v --self-contained-html --json-report
 ```
+
+`-k` usa guion bajo, no el sufijo del CSV con guiones — ver la nota en
+[Comandos importantes](#comandos-importantes) más abajo.
 
 ### 5. Retroalimenta
 
 Tres escenarios:
 
-- **Todas las filas pasan**: `matriz-<nombre>: N/N filas verdes`.
+- **Todas las filas pasan**: `matriz_<endpoint>_<nombre>: N/N filas verdes`.
   Procede a `/opsx:archive`.
 - **Corta en la fila N**: pega el traceback del caso `[V<n>]` o `[I<n>]`
   específico. Claude analiza si es bug del test, dato faltante en
@@ -957,6 +960,8 @@ materializados en el código. Es un bug del test, no del ambiente.
 
 ## Comandos importantes
 
+### Tests existentes en `tests/`
+
 **Verificar qué selecciona un patrón `-k` antes de correrlo** (sin ejecutar
 nada):
 
@@ -1010,6 +1015,19 @@ pytest --sw-reset -x -k "matriz_<nombre>" -v
 ruff check --fix .
 ruff format .
 ```
+**Lista de Test implementados y su comando de ejecución:**
+
+| Archivo | Qué cubre | Comando |
+|---|---|---|
+| `test_smoke.py` | SMOKE-001 — `Settings` y `variables.yaml` cargan sin excepción | `pytest -k "SMOKE-001" -v` |
+| `test_smoke_auth.py` | SMOKE-002 — apertura de sesión para roles `Admin` y `SuperAdmin` | `pytest -k "SMOKE-002" -v` |
+| `test_smoke_audit_logs.py` | SMOKE-003 — primera página de audit logs | `pytest -k "SMOKE-003" -v` |
+| `test_framework_matrix.py` | Unit tests de `matrix.build_payload` y `variables.resolve` (sin HTTP) | `pytest tests/test_framework_matrix.py -v` |
+| `test_matriz_create_c1_sin_header.py` | Matriz `c1-sin-header` — 73 filas rol `Admin` | `pytest --stepwise -x -k "matriz_create_c1_sin_header and not super_admin" -v` |
+| ↳ misma matriz, rol `SuperAdmin` | 70 filas — invariante de que ningún rol relaja la validación | `pytest --stepwise -x -k "matriz_create_c1_sin_header_super_admin" -v` |
+| ↳ ambos roles juntos | 143 filas — corta en el primer fallo de cualquiera de los dos | `pytest --stepwise -x -k "matriz_create_c1_sin_header" -v` |
+| `test_matriz_create_c2_header_texto.py` | Matriz `c2-header-texto` — 18 filas rol `Admin` | `pytest --stepwise -x -k "matriz_create_c2_header_texto" -v` |
+
 
 ## Referencias
 

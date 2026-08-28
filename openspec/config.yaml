@@ -423,12 +423,20 @@ context: |
   - **TC individual** (`TC-XXX` del `.md`):
     `pytest --stepwise -k "TC-001" -v`
   - **Matriz completa**:
-    `pytest --stepwise -x -k "matriz-<nombre>" -v`
+    `pytest --stepwise -x -k "matriz_<endpoint>_<nombre>" -v`
 
   La bandera `-x` es **obligatoria** en corridas de matriz: corta al primer
   fallo del test parametrizado y reporta al desarrollador, sin gastar
   tiempo en el resto de filas del CSV. Sin `-x` el runner continuaría
   con todas las filas, saturando el reporte.
+
+  El patrón de `-k` usa **guion bajo**, no el sufijo del CSV con guiones:
+  hace matching por substring literal contra el node id de pytest, y el
+  nombre real de la función parametrizada es
+  `test_matriz_<endpoint>_<nombre>` (ej. `test_matriz_create_c2_header_texto`
+  para el CSV `create-matriz-c2-header-texto.csv`), nunca
+  `matriz-<nombre>` con guiones — los nombres de función Python no admiten
+  guiones.
 
   # Ciclo humano-en-medio (crítico)
 
@@ -588,7 +596,7 @@ rules:
     - "Para changes de tipo matriz: si `docs.md` declara mirror keys, incluye tarea de ejecutar el assert de espejo **solo en los casos de éxito** (`V1..Vn`, es decir `status < 400`, incluido el `206`). Los casos de error (`I1..In`) no lo ejecutan. La firma concreta la define el change que implemente `src/framework/mirror.py`."
     - "Para changes de tipo matriz: si una corrida revela que el endpoint se comporta distinto a lo que declara la matriz o el `docs.md`, incluye tarea de marcar ese caso con `pytest.mark.xfail(strict=True, reason=...)` citando el id y la discrepancia, y de registrarlo en `inputs/<endpoint-slug>/hallazgos.md`. Nunca ajustes el valor esperado del test para que pase."
     - "Para changes de tipo matriz: no incluyas tareas de anotación de resultados en CSV. La evidencia de la corrida son `reports/report.html` y `reports/resultados.json`; no se produce copia anotada del CSV ni se escribe `PASS`/`FAIL` en ninguna matriz, ni en `inputs/` ni en `reports/`. La trazabilidad caso ↔ fila se lee del nodeid parametrizado `[V<n>]`/`[I<n>]`."
-    - "Incluye siempre una tarea final marcada como bloqueante: para TC, `Ejecutar pytest --stepwise -k <TC-ID>`; para matriz, `Ejecutar pytest --stepwise -x -k matriz-<nombre>`. Entregar salida al QA para retroalimentación. El change no se archiva sin retroalimentación humana positiva."
+    - "Incluye siempre una tarea final marcada como bloqueante: para TC, `Ejecutar pytest --stepwise -k <TC-ID>`; para matriz, `Ejecutar pytest --stepwise -x -k matriz_<endpoint>_<nombre>` (guion bajo — es substring del nombre real de la función `test_matriz_<endpoint>_<nombre>`, no el sufijo del CSV con guiones). Entregar salida al QA para retroalimentación. El change no se archiva sin retroalimentación humana positiva."
 
   specs:
     - "Las specs describen contratos observables del endpoint (comportamientos), no casos individuales. Un endpoint = una spec. Los TC y los casos de matriz quedan trazados como changes archivados, no como líneas de spec."

@@ -230,8 +230,55 @@ matrix_values:
   MTZ-create-footer-vacio: ''
   # (ausente)
   MTZ-create-header-ausente: __AUSENTE__
+# tests\test_matriz_create_c2_header_texto.py
+  # (ausente cuando type=TEXT)
+  MTZ-create-header-ausente_cuando_type_text: __AUSENTE__
+  # (cadena que alterna entre mayúsculas y minúsculas, con una única variable {{1}})
+  MTZ-create-header-cadena_que_alterna_con_variable: 'AbCdEfGhIj {{1}}'
+  # (caracteres especiales, con una única variable {{1}})
+  MTZ-create-header-caracteres_especiales_con_variable: '!@#$%^&*() {{1}}'
+  # (contiene 4 o más espacios consecutivos)
+  MTZ-create-header-contiene_4_o_mas_espacios: 'Hola    Mundo'
+  # (contiene dos o más variables)
+  MTZ-create-header-contiene_dos_o_mas_variables: 'Hola {{1}} y {{2}}'
+  # (contiene salto de línea)
+  MTZ-create-header-contiene_salto_de_linea: "Hola\nMundo"
+  # (longitud 61, por encima del máximo)
+  MTZ-create-header-longitud_61: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # (longitud máxima, con una única variable {{1}}, 60 caracteres)
+  MTZ-create-header-longitud_maxima_con_variable: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx{{1}}'
+  # (longitud mínima, 1 carácter)
+  MTZ-create-header-longitud_minima: x
+  # (texto típico de longitud media, con una única variable {{1}})
+  MTZ-create-header-texto_tipico_con_variable: 'Hola, tienes una oferta especial {{1}}'
+  # (texto típico con una única variable {{1}})
+  MTZ-create-header-texto_tipico_con_una_unica_variable: 'Hola {{1}}, oferta especial para ti'
+  # (texto típico sin variables, longitud media)
+  MTZ-create-header-texto_tipico_sin_variables: Oferta especial de la semana
+  # (vacío)
+  MTZ-create-header-vacio: ''
   # (ausente)
   MTZ-create-header_var-ausente: __AUSENTE__
+  # (ausente cuando header contiene variable)
+  MTZ-create-header_var-ausente_cuando_header_contiene_variable: __AUSENTE__
+  # (cadena que alterna entre mayúsculas y minúsculas)
+  MTZ-create-header_var-cadena_que_alterna_entre_mayusculas_y: AbCdEfGhIj
+  # (caracteres especiales)
+  MTZ-create-header_var-caracteres_especiales: '!@#$%^&*()_+-='
+  # (contiene 4 o más espacios consecutivos)
+  MTZ-create-header_var-contiene_4_o_mas_espacios: 'valor    con espacios'
+  # (contiene salto de línea)
+  MTZ-create-header_var-contiene_salto_de_linea: "valor\ncon salto"
+  # (longitud 61, por encima del máximo)
+  MTZ-create-header_var-longitud_61: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # (longitud máxima, 60 caracteres)
+  MTZ-create-header_var-longitud_maxima: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  # (longitud mínima, 1 carácter)
+  MTZ-create-header_var-longitud_minima: x
+  # (valor típico correspondiente a la variable del header)
+  MTZ-create-header_var-valor_tipico_correspondiente_a_la_variable: Juan
+  # (vacío)
+  MTZ-create-header_var-vacio: ''
   # (ausente)
   MTZ-create-lang-ausente: __AUSENTE__
   # en_US
@@ -280,6 +327,8 @@ matrix_values:
   MTZ-create-type-ausente: __AUSENTE__
   # (caracteres especiales)
   MTZ-create-type-caracteres_especiales: TEXT!
+  # TEXT
+  MTZ-create-type-text: TEXT
   # (tipo de dato incorrecto, numérico)
   MTZ-create-type-tipo_de_dato_incorrecto: 123
   # (vacío)

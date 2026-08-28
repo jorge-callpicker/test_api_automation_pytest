@@ -214,7 +214,10 @@ Comandos que sugieres al QA (nunca los invocas tú):
 pytest --stepwise -k "TC-001" -v
 
 # Matriz completa — la bandera -x es OBLIGATORIA
-pytest --stepwise -x -k "matriz-c2-noauth-text" -v
+# -k usa guion bajo: es substring del nombre real de la función
+# (test_matriz_<endpoint>_<nombre>, ej. test_matriz_create_c2_header_texto),
+# no el sufijo del CSV con guiones.
+pytest --stepwise -x -k "matriz_create_c2_header_texto" -v
 
 # Reintentar solo los últimos fallidos
 pytest --last-failed -v
