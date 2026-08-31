@@ -70,6 +70,18 @@ test_cases:
   #  variables:
   #    TC-001-template_id_sin_envios: "[REQUIERE RESPUESTA: template_id sembrado según la descripción de seed. Ejemplo: 100123]"
 
+  # --- Sembradas por add-test-create-tc-001 (endpoint create) ---
+  TC-001:
+    description: "Creación mono-app sin encabezado (Marketing) - Set 1"
+    variables:
+      # "Hello {{1}}" -- el {{1}} es sintaxis nativa de WhatsApp/Gupshup, no
+      # una variable de este framework. Referenciar SIEMPRE como
+      # {{TC-001-body_texto}} completo (nunca mezclado con texto en el
+      # payload del test), para que variables.resolve() no intente resolver
+      # "1" como si fuera un nombre de variable propio.
+      TC-001-body_texto: "Hello {{1}}"
+      TC-001-body_var_ejemplo: "cliente_prueba"
+
 
 # =============================================================================
 # MATRIX_VALUES — Variables MTZ-* usadas por tests de matriz CSV

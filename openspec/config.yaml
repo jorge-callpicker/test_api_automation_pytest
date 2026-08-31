@@ -421,7 +421,7 @@ context: |
   Dos modos según el tipo de test:
 
   - **TC individual** (`TC-XXX` del `.md`):
-    `pytest --stepwise -k "TC-001" -v`
+    `pytest --stepwise -k "create_tc_001" -v`
   - **Matriz completa**:
     `pytest --stepwise -x -k "matriz_<endpoint>_<nombre>" -v`
 
@@ -430,9 +430,21 @@ context: |
   tiempo en el resto de filas del CSV. Sin `-x` el runner continuaría
   con todas las filas, saturando el reporte.
 
-  El patrón de `-k` usa **guion bajo**, no el sufijo del CSV con guiones:
-  hace matching por substring literal contra el node id de pytest, y el
-  nombre real de la función parametrizada es
+  El patrón de `-k` usa **guion bajo**, nunca guiones, en TC individual ni
+  en matriz: hace matching por substring literal contra el node id de
+  pytest (ruta del archivo + nombre de función + parámetros) — **nunca**
+  contra el argumento de un marcador custom como `@pytest.mark.tc("TC-001")`,
+  que no forma parte del node id. Verificado empíricamente:
+  `pytest --collect-only -k "SMOKE-003"` contra un test marcado
+  `@pytest.mark.tc("SMOKE-003")` selecciona **0 tests**. Por eso el nombre
+  de archivo/función de un change TC debe incluir el identificador con
+  guion bajo, no el `TC-XXX` con guion del `.md`: `tests/test_<endpoint>_tc_<nnn>.py`
+  con función `test_<endpoint>_tc_<nnn>` (ej. `tests/test_create_tc_001.py`,
+  función `test_create_tc_001`, seleccionado con `-k "create_tc_001"`). El
+  marcador `@pytest.mark.tc("TC-XXX")` se mantiene igual para trazabilidad
+  legible, pero no sirve para seleccionar la corrida.
+
+  Lo mismo aplica a matriz: el nombre real de la función parametrizada es
   `test_matriz_<endpoint>_<nombre>` (ej. `test_matriz_create_c2_header_texto`
   para el CSV `create-matriz-c2-header-texto.csv`), nunca
   `matriz-<nombre>` con guiones — los nombres de función Python no admiten

@@ -61,13 +61,48 @@ que ya nace como Super admin), así que este change no tiene hermano de rol.
    Se mapean, sin crear alias nuevos, a las ya sembradas
    `GLB-account_id_valido` (65) y `GLB-create-app_id_valido` (mismas que
    usan `c1`/`c2`).
+6. **Nombre de archivo**: `test_tc_001_creacion_mono_app_sin_encabezado.py`
+   se acorta a `tests/test_create_tc_001.py` (`test_create_tc_001` la
+   función) — habrá varios endpoints y varios TC, y el nombre largo no
+   escala. `tests/__init__.py` existe (paquete Python), así que el nombre
+   debe ser un identificador válido: guion bajo, nunca guion.
+7. **Aislamiento del reporte**: el Assert 3 (auditoría) hace una petición
+   HTTP adicional después de la petición al endpoint bajo prueba. Si
+   reutilizara el `http_client` de la fixture, el hook
+   `pytest_runtest_makereport` de `conftest.py` — que toma
+   `http_client.last_request`/`last_response` al terminar el test —
+   registraría en el reporte la petición a Chatwoot (auditoría) en vez de
+   la petición a Plantillas, que es la que interesa observar (lo que
+   estamos probando es el API de Plantillas, no el de auditoría). Se
+   resuelve con un `httpx.Client()` plano, sin los event hooks de
+   `framework.http.client()`, instanciado solo en este archivo de test
+   exclusivamente para la llamada de verificación a `audit_logs` — cero
+   cambios en `framework/http.py`, `audit_logs.py` ni `conftest.py`.
+8. **Corrección de convención descubierta**: verificado empíricamente
+   (`pytest --collect-only -k "SMOKE-003"` contra
+   `tests/test_smoke_audit_logs.py`, que ya usa
+   `@pytest.mark.tc("SMOKE-003")`) que `-k` compara contra el node id
+   (ruta + función + parámetros), nunca contra el argumento de un
+   marcador custom — el resultado fue **0 tests seleccionados**. El
+   comando de ejecución para TC individual que documenta
+   `openspec/config.yaml` (`pytest --stepwise -k "TC-001" -v`) selecciona
+   cero tests tal como está escrito, porque ningún identificador Python
+   puede llevar el guion de "TC-001" — la misma limitación que
+   `config.yaml` ya reconoce para matrices ("el patrón de `-k` usa guion
+   bajo, no el sufijo con guiones") nunca se extendió al comando de TC
+   individual. Como TC-001 es el primer change tipo TC del repo, es la
+   primera vez que esto se pone a prueba. Se corrige el ejemplo de
+   `openspec/config.yaml` como tarea de este change (ver `tasks.md`), y
+   este change usa `pytest --stepwise -k "create_tc_001" -v` (coincide con
+   el nombre de archivo/función de la decisión 6, y evita colisión con un
+   futuro `TC-001` de otro endpoint).
 
 ## What Changes
 
-- Añade `tests/test_tc_001_creacion_mono_app_sin_encabezado.py` con
-  `test_tc_001_creacion_mono_app_sin_encabezado`, marcado
+- Añade `tests/test_create_tc_001.py` con `test_create_tc_001`, marcado
   `@pytest.mark.tc("TC-001")` (mismo marcador que ya usa
-  `tests/test_smoke_audit_logs.py`).
+  `tests/test_smoke_audit_logs.py`; el marcador documenta la trazabilidad
+  aunque `-k` no pueda usarlo para seleccionar el test — ver decisión 8).
 - Construye la petición base de `docs.md` (form-data) con
   `account_id`, `name`, `category=MARKETING`, `lang=en_US`, `apps` (una sola
   app), `body` con una variable `{{1}}`, `body_var` con un elemento — sin
@@ -85,6 +120,9 @@ que ya nace como Super admin), así que este change no tiene hermano de rol.
   `associated_id = account_id`, y `comment` que referencia el `name`
   generado (patrón `Se creó la plantilla {name} (#{template_id})...`, sin
   fijar `template_id`/`inbox_name`/`inbox_id` que son valores runtime).
+  Usa un `httpx.Client()` propio, distinto del `http_client` de la
+  fixture, para no pisar en el reporte la petición al endpoint bajo
+  prueba (ver decisión 7).
 - Variables nuevas en `variables.yaml → test_cases.TC-001.variables:`:
   - `TC-001-body_var_ejemplo`: valor literal típico para `body_var[0]`
     (Ruta 1 estática).
@@ -125,8 +163,12 @@ que ya nace como Super admin), así que este change no tiene hermano de rol.
 
 ## Impact
 
-- **Código nuevo**: `tests/test_tc_001_creacion_mono_app_sin_encabezado.py`.
-  Sin cambios en `src/framework/`.
+- **Código nuevo**: `tests/test_create_tc_001.py`. Sin cambios en
+  `src/framework/`.
+- `openspec/config.yaml` — corrige el ejemplo de comando de ejecución para
+  TC individual (de `-k "TC-001"`, que selecciona 0 tests, a la forma con
+  guion bajo). Cambio de documentación de convención, no de comportamiento
+  de ningún test existente.
 - `variables.yaml` — 1 entrada nueva en `test_cases.TC-001.variables:`
   (`TC-001-body_var_ejemplo`). Cero entradas nuevas en `globals:` ni en
   `matrix_values:`.
