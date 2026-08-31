@@ -311,3 +311,36 @@ curl --location 'https://api.chatdev.callpicker.com/integrations/gupshup_integra
 > **Nota:** Solo se muestran los campos que si aparecen en la respuesta
 
 No hay campos que validar en esta sección
+
+## Bases de datos utilizadas
+
+### Base de Datos `oauth`
+
+**templates_gupshup**
++-----------------------+--------------+------+-----+-------------------+-----------------------------+
+| Field                 | Type         | Null | Key | Default           | Extra                       |
++-----------------------+--------------+------+-----+-------------------+-----------------------------+
+| id                    | int(11)      | NO   | PRI | NULL              | auto_increment              |
+| app_name              | varchar(255) | NO   | MUL | NULL              |                             |
+| app_id                | varchar(100) | YES  |     | NULL              |                             |
+| id_gupshup            | varchar(255) | NO   |     | NULL              |                             |
+| template_code_name    | varchar(179) | YES  |     | NULL              |                             |
+| account_id            | int(11)      | YES  |     | NULL              |                             |
+| params                | text         | YES  |     | NULL              |                             |
+| cronjob_template_sync | smallint(1)  | YES  |     | 1                 |                             |
+| canned_response_id    | varchar(100) | YES  |     | NULL              |                             |
+| category              | varchar(100) | YES  |     | NULL              |                             |
+| old_category          | varchar(100) | YES  |     | NULL              |                             |
+| templateType          | varchar(150) | YES  |     | NULL              |                             |
+| status                | varchar(100) | YES  |     | NULL              |                             |
+| quality               | varchar(100) | YES  |     | NULL              |                             |
+| data                  | text         | YES  |     | NULL              |                             |
+| meta                  | text         | YES  |     | NULL              |                             |
+| languageCode          | varchar(50)  | YES  |     | NULL              |                             |
+| namespace             | varchar(100) | YES  |     | NULL              |                             |
+| reason                | text         | YES  |     | NULL              |                             |
+| active                | tinyint(4)   | NO   |     | 1                 |                             |
+| datetime_created      | datetime     | YES  |     | CURRENT_TIMESTAMP |                             |
+| datetime_updated      | datetime     | YES  |     | CURRENT_TIMESTAMP | on update CURRENT_TIMESTAMP |
++-----------------------+--------------+------+-----+-------------------+-----------------------------+
+
