@@ -16,7 +16,7 @@ from framework.http import client as build_client
 from framework.http import to_curl
 from framework.variables import resolve
 
-_engine_cache: dict[int, object] = {}
+_engine_cache: dict[tuple[int, str], object] = {}
 
 # Default de pytest-json-report cuando el QA no pasa --json-report-file.
 _JSON_REPORT_FILE_DEFAULT = ".report.json"
@@ -40,10 +40,10 @@ def pytest_configure(config: pytest.Config) -> None:
         config.option.json_report_file = str(run_dir / "resultados.json")
 
 
-def _get_engine(settings: Settings):
-    key = id(settings)
+def _get_engine(settings: Settings, database: str):
+    key = (id(settings), database)
     if key not in _engine_cache:
-        _engine_cache[key] = build_engine(settings)
+        _engine_cache[key] = build_engine(settings, database)
     return _engine_cache[key]
 
 
@@ -62,9 +62,28 @@ def http_client(settings: Settings):
 
 @pytest.fixture(scope="function")
 def db_conn(settings: Settings):
-    conn = _get_engine(settings).connect()
+    conn = _get_engine(settings, settings.DB_NAME).connect()
     yield conn
     conn.close()
+
+
+@pytest.fixture(scope="function")
+def db_conn_callpicker(settings: Settings):
+    conn = _get_engine(settings, settings.DB_NAME_CALLPICKER).connect()
+    yield conn
+    conn.close()
+
+
+@pytest.fixture(scope="function")
+def db_conn_chat(settings: Settings):
+    conn = _get_engine(settings, settings.DB_NAME_CHAT).connect()
+    yield conn
+    conn.close()
+
+
+@pytest.fixture(scope="function")
+def assert_log() -> list[dict[str, object]]:
+    return []
 
 
 @pytest.fixture(scope="session")
@@ -129,6 +148,22 @@ def pytest_runtest_makereport(item, call):
         extra.append(
             pytest_html.extras.html(
                 f"<h4>Aserciones de pytest-check fallidas</h4><pre>{failure}</pre>"
+            )
+        )
+
+    assert_log = item.funcargs.get("assert_log")
+    if assert_log:
+        rows = "\n".join(
+            f"<tr><td>{escape(str(entry['label']))}</td>"
+            f"<td>{'PASSED' if entry['ok'] else 'FAILED'}</td>"
+            f"<td>{escape(str(entry['detail']))}</td></tr>"
+            for entry in assert_log
+        )
+        extra.append(
+            pytest_html.extras.html(
+                "<h4>Aserciones (TC-XXX)</h4>"
+                "<table><thead><tr><th>Aserción</th><th>Resultado</th>"
+                f"<th>Detalle</th></tr></thead><tbody>{rows}</tbody></table>"
             )
         )
 

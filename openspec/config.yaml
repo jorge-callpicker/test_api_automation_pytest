@@ -437,12 +437,21 @@ context: |
   que no forma parte del node id. Verificado empíricamente:
   `pytest --collect-only -k "SMOKE-003"` contra un test marcado
   `@pytest.mark.tc("SMOKE-003")` selecciona **0 tests**. Por eso el nombre
-  de archivo/función de un change TC debe incluir el identificador con
-  guion bajo, no el `TC-XXX` con guion del `.md`: `tests/test_<endpoint>_tc_<nnn>.py`
-  con función `test_<endpoint>_tc_<nnn>` (ej. `tests/test_create_tc_001.py`,
-  función `test_create_tc_001`, seleccionado con `-k "create_tc_001"`). El
-  marcador `@pytest.mark.tc("TC-XXX")` se mantiene igual para trazabilidad
-  legible, pero no sirve para seleccionar la corrida.
+  de función de un change TC debe incluir el identificador con guion bajo,
+  no el `TC-XXX` con guion del `.md`: función `test_<endpoint>_tc_<nnn>`
+  (ej. función `test_create_tc_001`, seleccionado con `-k "create_tc_001"`).
+  El marcador `@pytest.mark.tc("TC-XXX")` se mantiene igual para
+  trazabilidad legible, pero no sirve para seleccionar la corrida.
+
+  Todos los `TC-XXX` de un mismo endpoint se agrupan en un único archivo
+  `tests/test_<endpoint>.py` (ej. `tests/test_create.py`), que contiene una
+  función `test_<endpoint>_tc_<nnn>` por cada TC implementado — mismo
+  patrón que ya usan las matrices. La selección por `-k` no depende del
+  archivo, solo del nombre de función, así que agrupar no la afecta:
+  verificable con `pytest --collect-only -k "create_tc_001"` antes y
+  después de mover un TC al archivo agrupado. Cada change de tipo TC anexa
+  su función al archivo existente del endpoint (o lo crea, si es el primer
+  TC de ese endpoint) — nunca crea un archivo nuevo por TC.
 
   Lo mismo aplica a matriz: el nombre real de la función parametrizada es
   `test_matriz_<endpoint>_<nombre>` (ej. `test_matriz_create_c2_header_texto`

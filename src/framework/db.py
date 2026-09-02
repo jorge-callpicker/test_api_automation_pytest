@@ -6,13 +6,13 @@ from sqlalchemy.engine import URL
 from framework.config import Settings
 
 
-def engine(settings: Settings) -> Engine:
+def engine(settings: Settings, database: str) -> Engine:
     url = URL.create(
         drivername="mysql+pymysql",
         username=settings.DB_USER,
         password=settings.DB_PASSWORD,
         host=settings.DB_HOST,
         port=settings.DB_PORT,
-        database=settings.DB_NAME,
+        database=database,
     )
     return create_engine(url, isolation_level="AUTOCOMMIT")

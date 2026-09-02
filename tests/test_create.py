@@ -6,6 +6,7 @@ import pytest_check as check
 from sqlalchemy import text
 
 from framework import auth
+from framework.assert_log import step
 from framework.audit_logs import find_audit_log
 from framework.generators import unique_lowercase
 from framework.matrix import build_payload
@@ -31,7 +32,7 @@ FIELD_TYPES = {
 @pytest.mark.impacto("Alto")
 @pytest.mark.prioridad("Alta")
 @pytest.mark.criticidad("Crítica")
-def test_create_tc_001(settings, http_client, db_conn):
+def test_create_tc_001(settings, http_client, db_conn, assert_log):
     """TC-001 - Creacion mono-app sin encabezado (Marketing).
 
     Ver inputs/Create/casos-de-prueba.md y
@@ -75,15 +76,27 @@ def test_create_tc_001(settings, http_client, db_conn):
 
     body = response.json()
     payload_resp = body.get("payload") or []
-    check.is_true(len(payload_resp) >= 1, f"TC-001: 'payload' vacío en la respuesta: {body!r}")
+    step(
+        assert_log,
+        "Assert 1 [Respuesta] payload no vacío",
+        check.is_true,
+        len(payload_resp) >= 1,
+        f"TC-001: 'payload' vacío en la respuesta: {body!r}",
+    )
     if payload_resp:
         primer = payload_resp[0]
-        check.equal(
+        step(
+            assert_log,
+            "Assert 1 [Respuesta] app_id",
+            check.equal,
             primer.get("app_id"),
             app_id,
             f"TC-001: app_id inesperado en payload[0]: {primer.get('app_id')!r}",
         )
-        check.is_true(
+        step(
+            assert_log,
+            "Assert 1 [Respuesta] template presente",
+            check.is_true,
             "template" in primer,
             f"TC-001: falta el objeto 'template' en payload[0]: {primer!r}",
         )
@@ -104,20 +117,31 @@ def test_create_tc_001(settings, http_client, db_conn):
         .first()
     )
     if fila is None:
-        check.is_true(
+        step(
+            assert_log,
+            "Assert 2 [BD] fila encontrada",
+            check.is_true,
             False,
             f"TC-001: no se encontró fila en oauth.templates_gupshup para "
             f"app_id={app_id!r} account_id={account_id!r} "
             f"template_code_name={nombre_plantilla!r}",
         )
     else:
-        check.equal(
+        step(
+            assert_log,
+            "Assert 2 [BD] languageCode",
+            check.equal,
             fila["languageCode"],
             "en_US",
             f"TC-001: languageCode inesperado: {fila['languageCode']!r}",
         )
-        check.equal(
-            fila["category"], "MARKETING", f"TC-001: category inesperado: {fila['category']!r}"
+        step(
+            assert_log,
+            "Assert 2 [BD] category",
+            check.equal,
+            fila["category"],
+            "MARKETING",
+            f"TC-001: category inesperado: {fila['category']!r}",
         )
 
     # Assert 3 [API log Chatwot] -- cliente HTTP propio, sin los event hooks
@@ -136,23 +160,35 @@ def test_create_tc_001(settings, http_client, db_conn):
         audit_client.close()
 
     if entrada is None:
-        check.is_true(
+        step(
+            assert_log,
+            "Assert 3 [Auditoría] entrada encontrada",
+            check.is_true,
             False,
             f"TC-001: no se encontró entrada de auditoría con 'comment' que "
             f"referencie {nombre_plantilla!r} para account_id={account_id!r}",
         )
     else:
-        check.equal(
+        step(
+            assert_log,
+            "Assert 3 [Auditoría] auditable_type",
+            check.equal,
             entrada.get("auditable_type"),
             "Template",
             f"TC-001: auditable_type inesperado: {entrada.get('auditable_type')!r}",
         )
-        check.equal(
+        step(
+            assert_log,
+            "Assert 3 [Auditoría] source",
+            check.equal,
             entrada.get("source"),
             "admin_chat",
             f"TC-001: source inesperado: {entrada.get('source')!r}",
         )
-        check.equal(
+        step(
+            assert_log,
+            "Assert 3 [Auditoría] associated_id",
+            check.equal,
             entrada.get("associated_id"),
             account_id,
             f"TC-001: associated_id inesperado: {entrada.get('associated_id')!r}",
