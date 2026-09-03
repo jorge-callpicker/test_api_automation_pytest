@@ -6,7 +6,7 @@
 ## 2. Piezas nuevas de framework
 
 - [ ] 2.1 Crear `src/framework/assets.py` con `ASSETS_ROOT = PROJECT_ROOT / "assets"` y `load_asset(relative_path: str) -> bytes`, que lee el archivo y lanza `FileNotFoundError` con mensaje explícito (ruta esperada + referencia a `variables.yaml -> globals`) si no fue sembrado — ver `design.md` → Decisión 1.
-- [ ] 2.2 Modificar `to_curl` en `src/framework/http.py`: si `len(request.content)` supera 2MB, omitir la decodificación UTF-8 y mostrar `content-type` + tamaño en bytes en su lugar — ver `design.md` → Decisión 3.
+- [ ] 2.2 Modificar `to_curl` en `src/framework/http.py`: cuando el `content-type` sea `multipart/form-data`, reconstruir cada parte con el módulo estándar `email` en vez de decodificar el body completo — las partes con `filename` (archivo) se muestran como metadato (nombre, content-type, tamaño en bytes), nunca se decodifica su contenido; las demás se decodifican y muestran como `--form 'campo="valor"'`. Con fallback a `-d '<multipart no parseable, N bytes>'` si el parseo falla — ver `design.md` → Decisión 3.
 - [ ] 2.3 Crear `assets/create/file/` con un `.gitkeep` (carpeta versionada, contenido real ignorado) y añadir la regla correspondiente a `.gitignore` para que los archivos reales bajo `assets/` nunca se commiteen.
 - [ ] 2.4 Añadir en `openspec/config.yaml`, sección "Ruta 2 — Resolución en runtime", una aclaración de que los campos de `Tipo de Dato: File` **nunca** se resuelven por Ruta 1 (estática) ni Ruta 2 (runtime) sin importar si su tamaño activa el disparador de Volumen: su contenido siempre se sembra (Ruta 3), a cargo del QA — ver `design.md` → Decisión 4 y `proposal.md` → "Arquitectura objetivo".
 

@@ -30,9 +30,10 @@ UTF-8 para el reporte HTML, sin límite de tamaño.
 - No se resuelve el timeout de 30s del cliente HTTP compartido a nivel de
   framework — se usa el override por-request de httpx en los dos casos que
   lo necesitan (`V2`, `I3`), sin tocar `http.client()`.
-- No se implementa un parser real de multipart para el reporte — el fix de
-  `to_curl` es un guard genérico por tamaño, no una reconstrucción fiel del
-  cuerpo.
+- No se implementa un parser de multipart genérico para cualquier
+  `content-type` — solo la reconstrucción de `multipart/form-data` vía el
+  módulo estándar `email` (ver Decisión 3), suficiente para el único tipo
+  de body que producen los tests de este framework.
 - No se cubre `c4`/`c5`/`c6`/`buttons*`/`cruzada` — quedan como changes
   hermanos futuros que reutilizarán estas piezas.
 
@@ -108,34 +109,78 @@ Alternativa descartada: declarar `content_type` explícito por variable
 Se descarta por innecesaria — ningún caso de este CSV requiere un
 `content_type` que contradiga la extensión real del archivo.
 
-### 3. Guard de tamaño en `to_curl`, no parser de multipart
+### 3. `to_curl` reconstruye el multipart parte por parte; nunca decodifica una parte de archivo
+
+Descartada la primera idea (guard genérico por tamaño de body): un PDF
+"típico" de `V1` puede pesar bien por debajo de cualquier umbral razonable
+y aun así producir un `-d '...'` ilegible, porque `request.content.decode
+("utf-8", errors="replace")` decodifica también los bytes binarios del
+PDF — cada byte no-UTF-8 se vuelve `�`, ahogando en ruido los campos de
+texto que sí son legibles. El umbral resolvía el tamaño del reporte, no la
+legibilidad, que es el problema real.
+
+En su lugar, cuando el `content-type` es `multipart/form-data`, `to_curl`
+reconstruye cada parte usando el módulo estándar `email` (el multipart de
+httpx es MIME válido: alcanza con anteponerle su propio header
+`Content-Type` como si fuera el de un mensaje de correo, y `email` separa
+las partes por el boundary). Por cada parte:
+
+- Si trae `filename` en su `Content-Disposition` (es una parte de
+  archivo) → **nunca se decodifica su contenido**; se muestra como
+  metadato: nombre, `content-type` y tamaño en bytes.
+- Si no trae `filename` (un campo normal) → se decodifica como UTF-8 y se
+  muestra tal cual, igual que hoy.
 
 ```python
-_MAX_CURL_BODY_BYTES = 2 * 1024 * 1024  # 2MB
+import email
+from email.message import Message
+
+def _format_multipart(content: bytes, content_type: str) -> list[str]:
+    raw = f"Content-Type: {content_type}\r\n\r\n".encode() + content
+    message: Message = email.message_from_bytes(raw)
+    parts = []
+    for part in message.get_payload():
+        name = part.get_param("name", header="content-disposition")
+        filename = part.get_filename()
+        if filename:
+            payload = part.get_payload(decode=True) or b""
+            parts.append(
+                f"--form '{name}=@<archivo omitido del reporte: {filename}, "
+                f"{part.get_content_type()}, {len(payload)} bytes>'"
+            )
+        else:
+            value = (part.get_payload(decode=True) or b"").decode("utf-8", errors="replace")
+            parts.append(f"--form '{name}=\"{value}\"'")
+    return parts
 
 def to_curl(request: httpx.Request) -> str:
     parts = ["curl", "-X", request.method, f"'{request.url}'"]
     for key, value in request.headers.items():
         parts.append(f"-H '{key}: {value}'")
-    if request.content:
-        if len(request.content) > _MAX_CURL_BODY_BYTES:
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("multipart/form-data") and request.content:
+        try:
+            parts.extend(_format_multipart(request.content, content_type))
+        except Exception:
             parts.append(
-                f"-d '<body omitido en reporte: {len(request.content)} bytes, "
-                f"content-type={request.headers.get('content-type', '?')}>'"
+                f"-d '<multipart no parseable, {len(request.content)} bytes, "
+                f"content-type={content_type}>'"
             )
-        else:
-            body = request.content.decode("utf-8", errors="replace")
-            parts.append(f"-d '{body}'")
+    elif request.content:
+        parts.append(f"-d '{request.content.decode('utf-8', errors='replace')}'")
     return " ".join(parts)
 ```
 
-Genérico: protege cualquier body futuro que exceda el umbral, no solo
-archivos. Alternativa descartada: parsear el multipart para mostrar cada
-parte de texto real y solo omitir la parte de archivo. Se descarta por
-complejidad — `httpx` no expone las partes ya separadas post-envío, habría
-que re-parsear el `Content-Type: multipart/form-data; boundary=...` a
-mano, y el valor para el QA de ver el cURL exacto de un caso con archivo
-de 100MB es marginal frente al costo de mantenimiento.
+El tamaño del archivo deja de ser relevante para la legibilidad: `V1`
+(unos cientos de KB) e `I3` (>100MB) producen la misma línea de
+`--form 'file=@<archivo omitido...>'`, solo cambia el número de bytes
+reportado. Efecto colateral positivo: `c1`/`c2` también pasan de un único
+`-d '<multipart crudo>'` a `--form` por campo, más legible y más fiel a
+los ejemplos `curl --form` de `docs.md` — sin tocar esos tests, el cambio
+vive en `http.py` y aplica la próxima vez que corran.
+
+Alternativa descartada (guard por tamaño): ver arriba — resolvía el
+tamaño del reporte pero no la legibilidad, que es el requisito real.
 
 ### 4. Política: campos `File` siempre por Ruta 3 (sembrada)
 
@@ -159,7 +204,15 @@ el contenido de un archivo nunca lo genera el modelo ni en frío
   reporte tengan el body disponible después) → con un archivo de 100MB
   esto ya implica tenerlo completo en memoria durante la corrida de ese
   caso puntual; aceptado como costo de una corrida manual y local, no de
-  CI.
+  CI. El parser de `email` en `to_curl` (Decisión 3) no agrava esto: opera
+  sobre el mismo buffer ya en memoria, en una sola pasada, y nunca copia el
+  payload de una parte de archivo a un string (solo mide su longitud).
+- **El multipart de httpx no es válido para el parser de `email`** (caso
+  límite, ej. un encoding de boundary no estándar) → si `_format_multipart`
+  lanza una excepción, `to_curl` debe capturarla y volver al fallback
+  `-d '<content-type>, <N> bytes>'` en vez de romper el reporte de un test
+  que sí pasó o falló correctamente; se verifica con los primeros casos
+  reales (`V1`) antes de confiar en el parser para el resto de la matriz.
 - **`assets/` vacío en un checkout nuevo** → la carpeta se versiona con
   `.gitkeep` para que la ruta exista; el contenido real depende de que el
   QA la siembre siguiendo `tasks.md`. Sin eso, `V1`/`V2`/`I2`/`I3` fallan
