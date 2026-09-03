@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import email
+from email.message import Message
+
 import httpx
 
 from framework.config import Settings
@@ -31,11 +34,45 @@ def client(settings: Settings) -> httpx.Client:
     return instance
 
 
+def _format_multipart(content: bytes, content_type: str) -> list[str]:
+    # El multipart de httpx es MIME valido: basta anteponerle su propio
+    # Content-Type como si fuera el de un mensaje para que `email` separe
+    # las partes por el boundary. Una parte con `filename` es un archivo:
+    # nunca se decodifica su contenido (evita tanto un reporte gigante con
+    # un archivo de ~100MB como uno ilegible con uno chico -- ver
+    # design.md de add-test-create-matriz-c3-header-documento, Decision 3).
+    raw = f"Content-Type: {content_type}\r\n\r\n".encode() + content
+    message: Message = email.message_from_bytes(raw)
+    parts = []
+    for part in message.get_payload():
+        name = part.get_param("name", header="content-disposition")
+        filename = part.get_filename()
+        if filename:
+            payload = part.get_payload(decode=True) or b""
+            parts.append(
+                f"--form '{name}=@<archivo omitido del reporte: {filename}, "
+                f"{part.get_content_type()}, {len(payload)} bytes>'"
+            )
+        else:
+            value = (part.get_payload(decode=True) or b"").decode("utf-8", errors="replace")
+            parts.append(f"--form '{name}=\"{value}\"'")
+    return parts
+
+
 def to_curl(request: httpx.Request) -> str:
     parts = ["curl", "-X", request.method, f"'{request.url}'"]
     for key, value in request.headers.items():
         parts.append(f"-H '{key}: {value}'")
-    if request.content:
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("multipart/form-data") and request.content:
+        try:
+            parts.extend(_format_multipart(request.content, content_type))
+        except Exception:
+            parts.append(
+                f"-d '<multipart no parseable, {len(request.content)} bytes, "
+                f"content-type={content_type}>'"
+            )
+    elif request.content:
         body = request.content.decode("utf-8", errors="replace")
         parts.append(f"-d '{body}'")
     return " ".join(parts)

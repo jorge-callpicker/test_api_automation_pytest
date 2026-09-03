@@ -79,7 +79,7 @@ El sistema SHALL responder `400` cuando `account_id`, `name`, `category`, `lang`
 - **THEN** el sistema responde `400`
 
 ### Requirement: Reglas condicionales de encabezado (type/file/header)
-El sistema SHALL exigir `file` cuando `type` es `DOCUMENT`, `IMAGE` o `VIDEO`, SHALL exigir `header` cuando `type` es `TEXT`, y SHALL prohibir ambos cuando `type` está ausente. Cuando `type` es `TEXT`, `header` SHALL tener entre 1 y 60 caracteres, SHALL contener a lo sumo una variable `{{1}}`, y SHALL NOT contener saltos de línea ni 4 o más espacios consecutivos. `header_var` SHALL ser requerido si y solo si `header` contiene esa variable.
+El sistema SHALL exigir `file` cuando `type` es `DOCUMENT`, `IMAGE` o `VIDEO`, SHALL exigir `header` cuando `type` es `TEXT`, y SHALL prohibir ambos cuando `type` está ausente. Cuando `type` es `TEXT`, `header` SHALL tener entre 1 y 60 caracteres, SHALL contener a lo sumo una variable `{{1}}`, y SHALL NOT contener saltos de línea ni 4 o más espacios consecutivos. `header_var` SHALL ser requerido si y solo si `header` contiene esa variable. Cuando `type` es `DOCUMENT`, `file` SHALL ser un archivo de tipo `application/pdf` de tamaño menor o igual a 100MB; el sistema SHALL rechazar la petición si `file` está ausente, es de un tipo distinto al permitido para el `type` declarado, o excede el tamaño máximo.
 
 #### Scenario: type fuera de la lista blanca
 - **WHEN** `type` está presente pero no es `TEXT`, `DOCUMENT`, `IMAGE` ni `VIDEO`
@@ -111,6 +111,26 @@ El sistema SHALL exigir `file` cuando `type` es `DOCUMENT`, `IMAGE` o `VIDEO`, S
 
 #### Scenario: header_var fuera de longitud o formato
 - **WHEN** `type` es `TEXT`, `header` contiene la variable `{{1}}`, y `header_var` está vacío, supera 60 caracteres, contiene un salto de línea, o contiene 4 o más espacios consecutivos
+- **THEN** el sistema responde `400`
+
+#### Scenario: Petición válida con documento
+- **WHEN** `type` es `DOCUMENT` y `file` es un PDF válido de tamaño menor o igual a 100MB, y el resto de campos requeridos son válidos
+- **THEN** el sistema acepta la petición (`200` o `206`)
+
+#### Scenario: Petición válida con documento de tamaño grande dentro del rango
+- **WHEN** `type` es `DOCUMENT` y `file` es un PDF válido de tamaño considerablemente mayor al típico pero por debajo del límite de 100MB, y el resto de campos requeridos son válidos
+- **THEN** el sistema acepta la petición (`200` o `206`)
+
+#### Scenario: file ausente siendo type DOCUMENT
+- **WHEN** `type` es `DOCUMENT` y `file` no se envía
+- **THEN** el sistema responde `400`
+
+#### Scenario: file de tipo no permitido para DOCUMENT
+- **WHEN** `type` es `DOCUMENT` y `file` no es de tipo `application/pdf`
+- **THEN** el sistema responde `400`
+
+#### Scenario: file excede el tamaño máximo para DOCUMENT
+- **WHEN** `type` es `DOCUMENT` y `file` supera 100MB
 - **THEN** el sistema responde `400`
 
 ### Requirement: Reglas de cuerpo del mensaje (body/body_var)

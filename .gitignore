@@ -50,3 +50,9 @@ Thumbs.db
 
 # Documentos externos
 prompts/
+
+# Assets sembrados por el QA (ver add-test-create-matriz-c3-header-documento) —
+# la estructura de carpetas se versiona (.gitkeep), el contenido real no.
+assets/**
+!assets/**/
+!assets/**/.gitkeep

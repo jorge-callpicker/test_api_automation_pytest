@@ -61,8 +61,10 @@ ver `tests/test_matriz_create_c2_header_texto.py`). Este change introduce:
 ## What Changes
 
 - Añade el test parametrizado `test_matriz_create_c3_header_documento`, que
-  cubre las **5 filas** del CSV (`V1–V2`, `I1–I3`) en un único
-  `pytest.mark.parametrize`, consumiendo `matrix.build_payload`,
+  cubre las **5 filas** del CSV (`V1–V2`, `I1–I3`) más **1 caso
+  suplementario** (`V1-archivo-grande`, ver más abajo) en un único
+  `pytest.mark.parametrize` sobre `CASES_TODAS = CASES + CASES_SUPLEMENTARIOS`,
+  consumiendo `matrix.build_payload`,
   `auth.obtain_session_tokens`, `variables.resolve` y el nuevo
   `framework.assets.load_asset`. El `BASE_REQUEST` de este contexto fija
   `header`, `header_var`, `security` y `expiration` en `OMIT` (los dos
@@ -85,16 +87,42 @@ ver `tests/test_matriz_create_c2_header_texto.py`). Este change introduce:
   el placeholder por la ruta real. El contenido del archivo en esa ruta lo
   coloca el QA, no el proyecto:
 
-  | Variable | Indicación original | Ruta sugerida | Caso |
+  | Variable | Indicación original | Ruta sembrada | Caso |
   |---|---|---|---|
-  | `GLB-create-file-pdf_valido_tipico` | (archivo PDF válido, tamaño típico) | `create/file/pdf_valido_tipico.pdf` | V1 |
-  | `GLB-create-file-pdf_max_100mb` | (archivo PDF de tamaño exactamente 100MB, límite máximo) | `create/file/pdf_max_100mb.pdf` | V2 |
-  | `GLB-create-file-tipo_invalido` | (archivo de tipo no permitido para DOCUMENT, ej. imagen) | `create/file/tipo_invalido.jpg` | I2 |
-  | `GLB-create-file-pdf_excede_100mb` | (archivo PDF que excede 100MB) | `create/file/pdf_excede_100mb.pdf` | I3 |
+  | `GLB-create-file-pdf_valido_tipico` | (archivo PDF válido, tamaño típico) | `create/file/file-pdf_valido_tipico_7mb.pdf` (~7.9MB) | V1 |
+  | `GLB-create-file-pdf_max_100mb` | (archivo PDF de tamaño exactamente 100MB, límite máximo) | `create/file/file-pdf_max_100mb.pdf` (exactamente 104,857,600 bytes) | V2 |
+  | `GLB-create-file-tipo_invalido` | (archivo de tipo no permitido para DOCUMENT, ej. imagen) | `create/file/file-tipo_invalido.jpeg` | I2 |
+  | `GLB-create-file-pdf_excede_100mb` | (archivo PDF que excede 100MB) | `create/file/file-pdf_excede_100mb.pdf` (~150MB) | I3 |
+  | `GLB-create-file-pdf_valido_50mb` | *(no aplica — ver "Caso suplementario" abajo)* | `create/file/file-pdf_valido_tipico.pdf` (~56.9MB) | `V1-archivo-grande` |
 
-  Cada una trae una tarea de siembra explícita en `tasks.md`. El
-  `content_type` de cada parte se infiere de la extensión de la ruta
-  (`mimetypes.guess_type`) — no se declara aparte.
+  Cada una de las 4 primeras trae una tarea de siembra explícita en
+  `tasks.md`. El `content_type` de cada parte se infiere de la extensión de
+  la ruta (`mimetypes.guess_type`) — no se declara aparte.
+
+### Caso suplementario (no derivado del CSV)
+
+Durante la ejecución de este change, el QA pidió agregar un sexto caso:
+`V1-archivo-grande`, que reenvía la misma petición de `V1` salvo `file`,
+con un PDF válido pero de tamaño grande dentro del rango permitido
+(~56.9MB, sin llegar al límite de 100MB que ya cubre `V2`). Este caso
+**no corresponde a ninguna fila** de
+`inputs/Create/create-matriz-c3-header-documento.csv` (que solo tiene las
+5 filas del inventario de abajo).
+
+Decisión de trazabilidad: se implementa con un id explícito fuera del
+esquema `V<n>`/`I<n>` (que es posicional y se deriva del CSV) — llamarlo
+`V3` habría arriesgado una colisión de significado si el CSV real se
+regenera después con una fila nueva en esa posición. `CASES_SUPLEMENTARIOS`
+en el test queda separado de `CASES` (las 5 filas del CSV) precisamente
+para que el inventario de casos derivado del CSV, y su verificación por
+hash SHA-256, sigan describiendo únicamente lo que ese CSV contiene.
+
+Origen del archivo sembrado: es el mismo PDF de 56.9MB que originalmente
+se sembró (por error, ver hilo de la sesión) como "tamaño típico" de `V1`
+antes de corregirlo — se reutiliza aquí en vez de descartarlo, ahora bajo
+la variable `GLB-create-file-pdf_valido_50mb` con su propio comentario en
+`variables.yaml` explicando que es un caso suplementario, no una
+indicación de celda del CSV.
 - **Cero generadores nuevos** en `src/framework/generators.py` (ver
   "Arquitectura objetivo" — `file` no usa Ruta 2 en este proyecto).
 - **Cero variables `MTZ-*`/`GLB-*` nuevas** para el resto de campos: la fila
@@ -123,6 +151,9 @@ ver `tests/test_matriz_create_c2_header_texto.py`). Este change introduce:
 Las 5 filas son `Prioridad: alto` — no hay orden de prioridad que aplicar
 dentro del change; las 5 van en el mismo test parametrizado.
 
+Además, `V1-archivo-grande` (caso suplementario, 200, sin # original ni
+Prioridad — no viene del CSV, ver "Caso suplementario" arriba).
+
 ## Capabilities
 
 ### New Capabilities
@@ -147,12 +178,13 @@ dentro del change; las 5 van en el mismo test parametrizado.
   tamaño para no decodificar bodies grandes como UTF-8).
 - `variables.yaml` — 1 entrada nueva en `matrix_values:`
   (`MTZ-create-type-document`), 1 entrada nueva de Ruta 1 en
-  `matrix_values:` (`MTZ-create-file-ausente_cuando_type_document`), y 4
+  `matrix_values:` (`MTZ-create-file-ausente_cuando_type_document`), y 5
   entradas nuevas en `globals:` (`GLB-create-file-*`, todas sembradas con
-  placeholder de ruta, no de valor).
+  la ruta real ya reemplazada — 4 de las 5 filas del CSV, más
+  `GLB-create-file-pdf_valido_50mb` del caso suplementario).
 - `assets/create/file/` — carpeta nueva versionada (estructura, vía
-  `.gitkeep`); su contenido real (los 4 archivos) va en `.gitignore` y lo
-  coloca el QA.
+  `.gitkeep`); su contenido real (los 5 archivos, incluido el del caso
+  suplementario) va en `.gitignore` y lo coloca el QA.
 - `inputs/Create/create-matriz-c3-header-documento.csv` — fuente de este
   change, sin modificar por parte de este proposal.
 - `openspec/specs/create/spec.md` — el requerimiento de reglas
@@ -162,13 +194,15 @@ dentro del change; las 5 van en el mismo test parametrizado.
   `File` se resuelven siempre por Ruta 3 (sembrada), nunca generados
   dinámicamente aunque su tamaño active el disparador de Volumen (ver
   "Arquitectura objetivo" en `Why`).
-- **Ambiente**: cada corrida completa crea 2 plantillas nuevas (`V1`, `V2`)
-  en la cuenta `65`, con nombres generados por `unique_lowercase`, sin
-  colisión con las que ya crean `c1`/`c2`. Requiere que el QA haya sembrado
-  los 4 archivos bajo `assets/create/file/` antes de ejecutar.
-- **Ejecución**: `-x` obligatorio. Los casos `V2`/`I3` (archivos de ~100MB)
-  pueden requerir un timeout mayor al default de 30s del cliente HTTP —
-  se pasa como override por-request, sin tocar el cliente compartido.
+- **Ambiente**: cada corrida completa crea 3 plantillas nuevas (`V1`, `V2`,
+  `V1-archivo-grande`) en la cuenta `65`, con nombres generados por
+  `unique_lowercase`, sin colisión con las que ya crean `c1`/`c2`. Requiere
+  que el QA haya sembrado los 5 archivos bajo `assets/create/file/` antes
+  de ejecutar.
+- **Ejecución**: `-x` obligatorio. Los casos `V2`/`I3`/`V1-archivo-grande`
+  (archivos de varias decenas de MB o más) requieren un timeout mayor al
+  default de 30s del cliente HTTP — se pasa como override por-request, sin
+  tocar el cliente compartido.
 
 ### Non-Goals
 

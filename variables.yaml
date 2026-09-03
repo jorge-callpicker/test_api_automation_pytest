@@ -56,6 +56,25 @@ globals:
   # (nombre ya utilizado en una petición anterior)
   GLB-create-name_ya_utilizado: 'wa_prueba_envio'
 
+  # --- Sembradas por add-test-create-matriz-c3-header-documento (endpoint create) ---
+  # Los 4 valores son rutas relativas dentro de assets/, nunca el contenido
+  # del archivo: el proyecto no genera archivos, el QA los coloca siguiendo
+  # tasks.md -> "4. Siembra de assets (QA)". content_type se infiere de la
+  # extensión (mimetypes.guess_type), no se declara aparte.
+  # (archivo PDF válido, tamaño típico)
+  GLB-create-file-pdf_valido_tipico: "create\\file\\file-pdf_valido_tipico_7mb.pdf"
+  # Caso suplementario, no proviene de una fila del CSV -- agregado a
+  # pedido del QA durante el apply de add-test-create-matriz-c3-header-documento
+  # para cubrir un archivo grande pero dentro del rango (id de test
+  # V1-archivo-grande, fuera de la numeración V/I derivada del CSV).
+  GLB-create-file-pdf_valido_50mb: "create\\file\\file-pdf_valido_tipico.pdf"
+  # (archivo PDF de tamaño exactamente 100MB, límite máximo)
+  GLB-create-file-pdf_max_100mb: "create\\file\\file-pdf_max_100mb.pdf"
+  # (archivo de tipo no permitido para DOCUMENT, ej. imagen)
+  GLB-create-file-tipo_invalido: "create\\file\\file-tipo_invalido.jpeg"
+  # (archivo PDF que excede 100MB)
+  GLB-create-file-pdf_excede_100mb: "create\\file\\file-pdf_excede_100mb.pdf"
+
 
 test_cases:
 
@@ -218,6 +237,8 @@ matrix_values:
   MTZ-create-expiration-ausente: __AUSENTE__
   # (ausente)
   MTZ-create-file-ausente: __AUSENTE__
+  # (ausente cuando type=DOCUMENT)
+  MTZ-create-file-ausente_cuando_type_document: __AUSENTE__
   # (ausente)
   MTZ-create-footer-ausente: __AUSENTE__
   # (cadena de caracteres especiales)
@@ -339,6 +360,8 @@ matrix_values:
   MTZ-create-type-ausente: __AUSENTE__
   # (caracteres especiales)
   MTZ-create-type-caracteres_especiales: TEXT!
+  # DOCUMENT
+  MTZ-create-type-document: DOCUMENT
   # TEXT
   MTZ-create-type-text: TEXT
   # (tipo de dato incorrecto, numérico)

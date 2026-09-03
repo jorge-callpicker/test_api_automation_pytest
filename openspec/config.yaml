@@ -357,6 +357,15 @@ context: |
   catálogo tiene como fuente de verdad los docstrings de los generadores;
   nunca se edita a mano.
 
+  Excepción de tipo de dato: los campos con `Tipo de Dato: File` **nunca**
+  se resuelven por esta ruta ni por la Ruta 1, sin importar si su tamaño
+  activaría el disparador de Volumen (ej. "archivo de tamaño exactamente
+  100MB"). El modelo no genera ni fabrica contenido de archivo bajo ninguna
+  circunstancia — siempre es Ruta 3 (sembrada): la variable declara la ruta
+  relativa dentro de `assets/`, y el QA coloca el archivo real ahí antes de
+  ejecutar. Ver `add-test-create-matriz-c3-header-documento` para el primer
+  caso y el razonamiento completo.
+
   ## Ruta 3 — Resolución sembrada
 
   Para indicaciones que no se satisfacen escogiendo un valor ni generándolo,

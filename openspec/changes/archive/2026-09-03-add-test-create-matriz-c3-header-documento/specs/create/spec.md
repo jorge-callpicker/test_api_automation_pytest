@@ -39,6 +39,10 @@ El sistema SHALL exigir `file` cuando `type` es `DOCUMENT`, `IMAGE` o `VIDEO`, S
 - **WHEN** `type` es `DOCUMENT` y `file` es un PDF válido de tamaño menor o igual a 100MB, y el resto de campos requeridos son válidos
 - **THEN** el sistema acepta la petición (`200` o `206`)
 
+#### Scenario: Petición válida con documento de tamaño grande dentro del rango
+- **WHEN** `type` es `DOCUMENT` y `file` es un PDF válido de tamaño considerablemente mayor al típico pero por debajo del límite de 100MB, y el resto de campos requeridos son válidos
+- **THEN** el sistema acepta la petición (`200` o `206`)
+
 #### Scenario: file ausente siendo type DOCUMENT
 - **WHEN** `type` es `DOCUMENT` y `file` no se envía
 - **THEN** el sistema responde `400`

@@ -1027,6 +1027,7 @@ ruff format .
 | ↳ misma matriz, rol `SuperAdmin` | 70 filas — invariante de que ningún rol relaja la validación | `pytest --stepwise -x -k "matriz_create_c1_sin_header_super_admin" -v` |
 | ↳ ambos roles juntos | 143 filas — corta en el primer fallo de cualquiera de los dos | `pytest --stepwise -x -k "matriz_create_c1_sin_header" -v` |
 | `test_matriz_create_c2_header_texto.py` | Matriz `c2-header-texto` — 18 filas rol `Admin` | `pytest --stepwise -x -k "matriz_create_c2_header_texto" -v` |
+| `test_matriz_create_c3_header_documento.py` | Matriz `c3-header-documento` — 5 filas del CSV (`V1`, `V2`, `I1`, `I2`, `I3`) + 1 caso suplementario (`V1-archivo-grande`, no derivado del CSV — ver `openspec/changes/archive/2026-09-03-add-test-create-matriz-c3-header-documento/proposal.md`), rol `Admin` | `pytest --stepwise -x -k "matriz_create_c3_header_documento" -v` |
 
 
 ## Referencias
