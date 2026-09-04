@@ -1029,6 +1029,54 @@ ruff format .
 | `test_matriz_create_c2_header_texto.py` | Matriz `c2-header-texto` — 18 filas rol `Admin` | `pytest --stepwise -x -k "matriz_create_c2_header_texto" -v` |
 | `test_matriz_create_c3_header_documento.py` | Matriz `c3-header-documento` — 5 filas del CSV (`V1`, `V2`, `I1`, `I2`, `I3`) + 1 caso suplementario (`V1-archivo-grande`, no derivado del CSV — ver `openspec/changes/archive/2026-09-03-add-test-create-matriz-c3-header-documento/proposal.md`), rol `Admin` | `pytest --stepwise -x -k "matriz_create_c3_header_documento" -v` |
 
+---
+
+## Subir reporte a servidor (`upload_report.sh`)
+
+Script en Bash para subir de forma recursiva una carpeta de reporte de pruebas a un servidor remoto vía `scp`.
+
+### Requisitos
+
+- Cliente SSH/SCP (OpenSSH) instalado y disponible en el `PATH`.
+- **Windows**: requiere [Git Bash](https://git-scm.com/downloads) (incluido en Git for Windows) o WSL, ya que el script está escrito en Bash.
+- **Linux/macOS**: Bash ya viene preinstalado (el script es compatible con bash 3.2+).
+
+### Uso
+
+```bash
+./upload_report.sh <user> <src> <dest> [--port PORT] [--host HOST]
+```
+
+| Parámetro | Descripción                              | Obligatorio | Valor por defecto                  |
+|-----------|-------------------------------------------|:-----------:|-------------------------------------|
+| `user`    | Usuario SSH para acceder al servidor       | Sí          | —                                    |
+| `src`     | Carpeta origen a subir (recursivo)         | Sí          | —                                    |
+| `dest`    | Carpeta destino en el servidor             | Sí          | —                                    |
+| `--port`  | Puerto SSH/SCP                             | No          | `2210`                               |
+| `--host`  | Host o IP del servidor                     | No          | Placeholder definido en el script    |
+
+### Ejemplos
+
+```bash
+# Subida básica
+./upload_report.sh fulanito reports/20260903-125014 /var/www/html/qa_reports
+
+# Especificando un puerto distinto
+./upload_report.sh fulanito reports/20260903-125014 /var/www/html/qa_reports --port 2222
+
+# Especificando el host en la ejecución
+./upload_report.sh fulanito reports/20260903-125014 /var/www/html/qa_reports --host qa.miempresa.com
+```
+
+### Validaciones que realiza el script
+
+Antes de invocar `scp`, el script valida en orden:
+
+1. Que el host no tenga el valor de placeholder (o se haya indicado `--host`).
+2. Que el comando `scp` esté disponible en el `PATH`.
+3. Que la carpeta origen (`src`) exista.
+4. Que existan archivos dentro de la carpeta origen (búsqueda recursiva). Si no hay archivos, el script termina con error y no llega a ejecutar `scp`.
+
 
 ## Referencias
 
